@@ -1,0 +1,6 @@
+# CODEOWNERS — {{ repo_name }} placeholder
+#
+# Update with real GitHub handles per the handbook github_user_map
+# convention (see juvant-os JUVANT_OS.md Step 1.6 for the source pattern).
+
+* @juvantlabs

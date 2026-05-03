@@ -1,0 +1,52 @@
+name: Publish
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Manual approval gate. Configure the 'production' environment in the repo
+    # settings (Settings → Environments) to require reviewer approval before
+    # the npm publish step runs. Without this gate, a compromised tag pushes
+    # straight to npm.
+    environment:
+      name: production
+      url: https://www.npmjs.com/package/${{ github.event.repository.name }}
+    permissions:
+      contents: read
+      id-token: write   # required for npm provenance
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: npm audit (moderate or higher)
+        run: npm audit --audit-level=moderate
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm (with provenance)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access=public --provenance

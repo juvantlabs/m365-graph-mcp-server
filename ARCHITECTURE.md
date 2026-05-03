@@ -1,0 +1,148 @@
+# Architecture — M365 Graph MCP Server
+
+Design rationale for `@juvantlabs/m365-graph-mcp-server`. Read alongside
+the [handbook MCP server spec](https://github.com/juvantlabs/handbook/blob/main/docs/repo-types/mcp-server.md)
+for the cross-cutting conventions; this doc covers what's specific to
+this server.
+
+## Purpose
+
+Wraps the Microsoft Graph API for AI-agent consumption: file operations
+on OneDrive + SharePoint Online, calendar reads + writes on Microsoft
+365 mailboxes. Fulfills the `m365-graph` abstract role per ADR 0002 in
+the handbook; replaces ad-hoc per-instance Graph SDK code with a
+single canonical MCP server, keeping the agent prompt surface clean and
+the auth path consolidated.
+
+## Scope
+
+### In scope (planned, via incremental ships)
+
+**OneDrive / SharePoint files**
+
+- List drives a user has access to.
+- List items in a drive (folders + files), with paging.
+- Search files by name/content within a drive or site.
+- Download a file (streamed; bounded by max-size guard).
+- Upload a small file (single PUT, ≤ 4 MB).
+- Upload a large file (resumable upload session, > 4 MB).
+- Copy / move items (async; tool polls the monitor URL until completion).
+- Delete items (gated by the spec/approval pattern referenced in [`docs/adr/0002-mcp-abstract-roles.md`](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0002-mcp-abstract-roles.md) — destructive ops surface a "spec preview" before executing).
+
+**Calendar**
+
+- List user calendars.
+- List events in a date range.
+- Create / update / cancel events.
+- Search events by subject / body.
+
+### Out of scope
+
+- **Mail send** — explicit non-goal for this server. Outbound email is a
+  separate concern with its own threat model (SPF / DKIM / DMARC, reply-all
+  blast radius, etc.). If needed, ships as `juvantlabs/m365-mail-mcp-server`.
+- **Teams chat / channel posts** — same reasoning; lives in a separate
+  server when scoped.
+- **Tenant admin operations** — never automated by the agent layer. These
+  remain manual / IT-administered.
+- **General-purpose URL forwarder** — explicitly forbidden by handbook
+  spec § Anti-patterns #2. Each tool is typed and schema-validated; the
+  Microsoft Graph URL surface is hardcoded inside the tool, not
+  caller-supplied.
+
+## Authentication
+
+OAuth 2.0 via `@azure/msal-node`'s `ConfidentialClientApplication`,
+scoped per the application registration in Microsoft Entra (tenant
+admin grants delegated and/or application permissions to the
+registered app).
+
+| Concern | Choice |
+|---|---|
+| OAuth library | `@azure/msal-node` (Microsoft's official) — never roll auth |
+| Flow | Authorization Code with PKCE for delegated; Client Credentials for daemon ops |
+| Scopes | Per-tool minimum: `Files.Read.All` for read-only file tools, `Files.ReadWrite.All` for write tools, `Calendars.Read` / `Calendars.ReadWrite` for calendar tools. Documented in [`README.md`](README.md) § Tools as tools ship. |
+| Token storage | `@napi-rs/keyring` (OS keychain). `keytar` is archived (handbook spec anti-pattern #10) — explicitly NOT used. |
+| Token lifetime | Refresh token rotation handled by MSAL; refreshes never enter the agent's context. |
+| Tenant ID | Validated at startup against the regex `^(common\|organizations\|consumers\|<UUID>)$` (handbook spec § Auth). Prevents arbitrary string interpolation into the authority URL. |
+
+The MCP server process loads tokens at startup, refreshes on demand, and
+exits when the client disconnects. **Per-tenant subprocess** — no
+shared module-level state across tenants (handbook spec § Per-tenant
+subprocess).
+
+## Threat model
+
+This server inherits the 12-item anti-pattern checklist from the
+[ftaricano audit](https://gist.github.com/juvantlabs/a9fe0a76a23b0c1260b1e0ad3194a6da)
+that informs the [handbook MCP server spec](https://github.com/juvantlabs/handbook/blob/main/docs/repo-types/mcp-server.md)
+§ Anti-patterns. Specific defenses:
+
+| Threat | Defense |
+|---|---|
+| Arbitrary local-FS write through `localPath` (audit C1–C4) | Every `download_file` / `upload_file` tool sandboxes to a per-tenant root. `path.resolve` + prefix check + symlink guard. Never trust caller-supplied `localPath`. |
+| URL forwarder primitive (audit C5) | No such tool. Each tool's Graph URL is hardcoded. |
+| Stdout corruption (audit C6) | `console.error` only; `console.log` blocked by ESLint + CI grep. |
+| Outdated MCP SDK (audit C7) | `@modelcontextprotocol/sdk ^1.25.2` pinned in `package.json`. |
+| Vulnerable axios (audit C8) | We use the Microsoft Graph SDK; no direct axios dep. |
+| Vulnerable `jws` transitively (audit C9) | Quarterly `npm audit` (CI step every PR). |
+| Defense-in-depth dead code (audit S1) | CI dead-code grep enforces every exported `validate*` / `sanitize*` / `guard*` is imported elsewhere in `src/`. |
+| README env-var lies (audit S2) | CI README env-var accuracy check. |
+| OData / URL injection (audit S3) | All Graph queries built via the SDK or with explicit `encodeURIComponent`. |
+| Token storage (audit S5) | `@napi-rs/keyring`, never `keytar`. |
+| Whole-file buffering (audit S7) | Downloads stream; max file size capped at 200 MB (configurable). |
+| No async-op polling (audit S8) | `copy` / `move` poll the monitor URL until completion; never return "initiated successfully" as the final result. |
+
+### Universal Boundaries (per `SYSTEM_INVARIANTS.md` §4)
+
+- No general-purpose URL forwarder primitive.
+- Per-tenant subprocess (no shared cache state across tenants).
+- Stdout discipline: `console.error` only outside protocol path.
+
+### Delete-class operations
+
+Delete tools (e.g. `delete_file`, `cancel_event`) follow the
+**spec/approval pattern**: the agent submits a spec describing what to
+delete; the tool returns a preview + a `confirmation_token`; a second
+call with the token executes the delete. Mirrors the
+`m365-delete-spec` pattern referenced in FEAT-014 and codified more
+generally in the handbook MCP abstract roles ADR.
+
+## Performance characteristics
+
+- Typical request latency: 100–500 ms for unary Graph calls; multi-second
+  for downloads (streamed).
+- Max file size (download + upload): **200 MB** hard cap, server-side.
+  Configurable via `M365_MAX_FILE_SIZE_BYTES` if the deployment needs a
+  smaller cap; never larger.
+- Streaming: downloads use the Graph SDK's stream interface; no
+  whole-file `arraybuffer` reads (audit S7 mitigation).
+- Async polling: `copy` / `move` ops poll the monitor URL with
+  exponential backoff (1s, 2s, 4s, …, max 30s) until status is
+  `succeeded` or `failed`. Tool returns the final state, never a 202.
+
+## Tool catalog
+
+(Filled in as tools land. Each row is also reflected in
+[`README.md`](README.md) § Tools.)
+
+| Tool | Underlying API call | Input shape | Output shape | Required scope | Notes |
+|---|---|---|---|---|---|
+| _(stub — first ship is `m365-graph:list_drives`)_ | | | | | |
+
+## Dependencies
+
+| Dependency | Version | Why |
+|---|---|---|
+| `@modelcontextprotocol/sdk` | `^1.25.2` | MCP framing; ≥1.25.2 required (ReDoS + DNS rebinding fixes — audit C7) |
+| `@microsoft/microsoft-graph-client` | (TBD on first auth-tool ship) | Microsoft's official Graph SDK — handles batching, retries, types |
+| `@azure/msal-node` | (TBD on first auth-tool ship) | OAuth — never roll auth |
+| `@napi-rs/keyring` | (TBD on first auth-tool ship) | OS keychain for token persistence; replaces archived `keytar` |
+
+## References
+
+- [Handbook MCP server spec](https://github.com/juvantlabs/handbook/blob/main/docs/repo-types/mcp-server.md)
+- [Handbook MCP abstract roles ADR (0002)](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0002-mcp-abstract-roles.md)
+- [Handbook security disclosure process](https://github.com/juvantlabs/handbook/blob/main/docs/security/disclosure-process.md)
+- [Juvant OS MCP_INVENTORY.md](https://github.com/juvantlabs/juvant-os/blob/main/docs/MCP_INVENTORY.md)
+- [ftaricano audit (2026-05-03)](https://gist.github.com/juvantlabs/a9fe0a76a23b0c1260b1e0ad3194a6da) — origin of the 12-item anti-pattern checklist

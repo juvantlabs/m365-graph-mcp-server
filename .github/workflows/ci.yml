@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests + coverage
+        run: npm run test:unit -- --coverage
+
+      - name: Integration tests
+        env:
+          VENDOR_SANDBOX_TOKEN: ${{ secrets.VENDOR_SANDBOX_TOKEN }}
+        run: |
+          if [ -z "${VENDOR_SANDBOX_TOKEN:-}" ]; then
+            echo "::notice::No VENDOR_SANDBOX_TOKEN secret — skipping integration tests."
+          else
+            npm run test:integration
+          fi
+
+      - name: npm audit (moderate or higher)
+        run: npm audit --audit-level=moderate
+
+      - name: Stdout discipline (no console.log in src/)
+        run: |
+          set -euo pipefail
+          if grep -rnE 'console\.log\(' src/ ; then
+            echo "::error::console.log found in src/ — corrupts MCP stdio JSON-RPC framing. Use console.error for diagnostics."
+            exit 1
+          fi
+          echo "OK — no console.log in src/"
+
+      - name: Dead-code check (unused security helpers)
+        run: |
+          set -euo pipefail
+          # Heuristic: every exported validate*/sanitize*/guard*/enforce*/assert*
+          # symbol declared in src/ must be referenced from at least one OTHER
+          # file in src/. Unreachable defense-in-depth code is a security smell
+          # (handbook anti-pattern S1).
+          fail=0
+          while IFS= read -r decl; do
+            [ -z "$decl" ] && continue
+            file=${decl%%:*}
+            line=${decl#*:}
+            name=$(echo "$line" | grep -oE '(validate|sanitize|guard|enforce|assert)[A-Z][A-Za-z0-9_]*' | head -1)
+            [ -z "$name" ] && continue
+            uses=$(grep -rEln "\\b$name\\b" src/ | grep -v "^$file$" | wc -l | tr -d ' ')
+            if [ "$uses" -eq 0 ]; then
+              echo "::error file=$file::Exported security helper '$name' is not imported from any other file in src/ — dead code is a security smell (handbook anti-pattern S1)."
+              fail=1
+            fi
+          done < <(grep -rnE '^export (function|const|class) (validate|sanitize|guard|enforce|assert)[A-Z]' src/ || true)
+          if [ "$fail" -eq 0 ]; then
+            echo "OK — no dead security helpers."
+          fi
+          exit "$fail"
+
+      - name: README env-var accuracy
+        run: |
+          set -euo pipefail
+          # Every env var documented in README.md's "## Environment variables"
+          # section must be referenced in src/ via process.env.X. Mismatches
+          # fail the build (handbook anti-pattern S2: env vars documented but
+          # not wired).
+          # Skip placeholder tokens containing '<' (e.g. <VENDOR>_API_KEY) and
+          # short common acronyms.
+          if [ ! -f README.md ]; then
+            echo "::warning::No README.md — skipping env-var accuracy check."
+            exit 0
+          fi
+          section=$(awk '
+            /^## Environment variables/  { in_section=1; next }
+            /^## /                       { in_section=0 }
+            in_section                   { print }
+          ' README.md)
+          if [ -z "$section" ]; then
+            echo "::notice::No '## Environment variables' section in README.md — skipping env-var accuracy check."
+            exit 0
+          fi
+          fail=0
+          # Extract `BACKTICK_QUOTED_UPPERCASE_TOKENS`, drop placeholders + acronyms.
+          vars=$(echo "$section" \
+            | grep -oE '`[A-Z][A-Z0-9_]+`' \
+            | tr -d '`' \
+            | sort -u \
+            | grep -vE '^(MCP|API|URL|HTTP|HTTPS|JSON|UUID|SDK|MIT|CI|PR|README|TLS|SSL|UTC|UTF8|HTML|REST|RPC|YAML|TOML|XML|RFC|JS|TS)$' \
+            || true)
+          for var in $vars; do
+            # Skip placeholder-shaped names from the same section
+            if echo "$section" | grep -qE "<[^>]*>${var}|${var}[^<]*<[^>]*>"; then
+              continue
+            fi
+            if ! grep -rqE "process\\.env\\.${var}\\b" src/ ; then
+              echo "::error::Env var '${var}' is documented in README.md '## Environment variables' but not referenced in src/ via process.env.${var} (handbook anti-pattern S2)."
+              fail=1
+            fi
+          done
+          if [ "$fail" -eq 0 ]; then
+            echo "OK — README env-var documentation matches src/."
+          fi
+          exit "$fail"

@@ -1,0 +1,57 @@
+{
+  "name": "@juvantlabs/m365-graph-mcp-server",
+  "version": "0.0.1",
+  "description": "Microsoft Graph MCP server — OneDrive, SharePoint, and Calendar read+write for Juvant OS agents.",
+  "license": "MIT",
+  "author": "Juvant Srls",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "m365-graph-mcp-server": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc --pretty false",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest",
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit",
+    "audit": "npm audit --audit-level=moderate"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juvantlabs/m365-graph-mcp-server.git"
+  },
+  "homepage": "https://github.com/juvantlabs/m365-graph-mcp-server#readme",
+  "bugs": {
+    "url": "https://github.com/juvantlabs/m365-graph-mcp-server/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "m365-graph",
+    "juvant-os"
+  ]
+}
