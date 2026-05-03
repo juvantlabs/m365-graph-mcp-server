@@ -9,9 +9,17 @@
  */
 
 import type { Tool } from "../types/tool.js";
+import { downloadFileTool } from "./download_file.js";
 import { listDrivesTool } from "./list_drives.js";
+import { listItemsTool } from "./list_items.js";
+import { searchFilesTool } from "./search_files.js";
 
-export const ALL_TOOLS: ReadonlyArray<Tool> = [listDrivesTool];
+export const ALL_TOOLS: ReadonlyArray<Tool> = [
+  listDrivesTool,
+  listItemsTool,
+  searchFilesTool,
+  downloadFileTool,
+];
 
 export function buildHandlerMap(tools: ReadonlyArray<Tool>): Map<string, Tool["handler"]> {
   const m = new Map<string, Tool["handler"]>();

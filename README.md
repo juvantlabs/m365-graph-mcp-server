@@ -42,6 +42,7 @@ Optional:
 | Variable | Purpose |
 |---|---|
 | `MCP_SERVER_LOG_LEVEL` | Log level for diagnostics on stderr (default `info`). |
+| `M365_DOWNLOAD_DIR` | Override the per-tenant sandbox directory used by `download_file`. Default: `$XDG_CACHE_HOME/m365-graph-mcp-server/<tenant-id>` or `~/.cache/m365-graph-mcp-server/<tenant-id>`. |
 
 > CI enforces that every variable documented in this section is actually
 > read from `process.env.<NAME>` somewhere in `src/` — placeholder names
@@ -73,11 +74,14 @@ for the abstract role this server fulfills + the canonical config shape.
 
 | Tool | Purpose | Input | Output | Required scope |
 |---|---|---|---|---|
-| `m365-graph:list_drives` | Lists the drives the authenticated user has access to (primary OneDrive + shared SharePoint document libraries). Read-only. | _(none)_ | JSON: `{ primary, accessible: [] }` with id / driveType / name / webUrl / owner per drive. | `Files.Read` (delegated) |
+| `m365-graph:list_drives` | Lists the drives the user has access to (primary OneDrive + shared document libraries). | _(none)_ | `{ primary, accessible: [] }` with id / driveType / name / webUrl / owner. | `Files.Read` |
+| `m365-graph:list_items` | Lists immediate children (files + folders) of a folder. Defaults to the drive root. | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` with id / name / type / size / child_count / lastModified / webUrl. | `Files.Read` |
+| `m365-graph:search_files` | Searches files by name and content within a drive. | `query` (required), `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with id / name / path / size / is_folder / lastModified / webUrl. | `Files.Read` |
+| `m365-graph:download_file` | Downloads a file to a per-tenant local sandbox. Returns the local path; agent reads via a filesystem-aware tool. Streams, capped at 200 MB. | `item_id` (required), `drive_id?` | `{ local_path, size_bytes, name, content_type }` | `Files.Read` |
 
-More tools land via PR — search, list items, download, upload, copy/move,
-calendar reads + writes. See [`ARCHITECTURE.md`](ARCHITECTURE.md) §
-Tool catalog.
+More tools land via PR — upload, copy/move (async polling), delete (with
+spec/approval pattern), calendar reads + writes. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) § Tool catalog.
 
 ## Local development
 

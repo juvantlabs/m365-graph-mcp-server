@@ -33,6 +33,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - First read tool `m365-graph:list_drives` under `src/tools/`. Returns
   the user's primary OneDrive plus other drives (shared SharePoint
   document libraries) accessible to them.
+- Three additional read tools, all under the `Files.Read` delegated
+  scope:
+  - `m365-graph:list_items` — list children of a folder (drive root or
+    specific folder via `item_id`). Distinguishes file vs folder via
+    presence of the `folder` facet; populates `child_count` for folders.
+  - `m365-graph:search_files` — OData search within a drive. Defaults
+    to the user's primary OneDrive; supports `drive_id` for SharePoint
+    libraries. Single-quote escaping in the query string.
+  - `m365-graph:download_file` — streams a file to a per-tenant local
+    sandbox (XDG-compliant default, `M365_DOWNLOAD_DIR` override).
+    200 MB cap enforced via metadata pre-check. Local filename is
+    server-constructed (`<sha256(item_id)[:16]>-<sanitized name>`) so
+    path injection is structurally impossible. 0o700 dir + 0o600 file
+    mode. Streamed via fetch + Node pipeline (no whole-file buffering
+    — handbook anti-pattern #11 mitigation).
+- Input validators in `src/types/validators.ts`
+  (`validateRequiredString`, `validateOptionalString`,
+  `validateOptionalInteger`, `sanitizeFilename`). The `validate*` /
+  `sanitize*` naming feeds into the CI dead-code grep.
 - Tool registry pattern (`src/tools/index.ts` + `src/types/tool.ts`)
   so subsequent tools land via single-file additions.
 - `setup` subcommand on the binary (`m365-graph-mcp-server setup`,
@@ -44,13 +63,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Pending
 
-- Tools: search, list items, download (streamed), upload (small +
-  resumable), copy/move (with async polling), delete (with
-  spec/approval pattern).
-- Calendar tools.
-- Vitest unit tests covering the `summarizeDrive` and tool dispatcher
-  pure-logic paths; integration tests against a live tenant once
-  sandbox tokens are available in CI.
+- Write tools: `upload_file` (small + resumable), `copy/move` (with
+  async polling), `delete` (with spec/approval pattern). Require
+  expanding the Entra app permissions to `Files.ReadWrite`.
+- Calendar tools (list, create, update, cancel, search).
+- Vitest unit tests covering the per-tool `summarize*` helpers,
+  validator helpers, and the dispatcher pure-logic paths;
+  integration tests against a live tenant once sandbox tokens are
+  available in CI.
 
 ---
 

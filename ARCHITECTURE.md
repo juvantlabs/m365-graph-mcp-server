@@ -123,21 +123,58 @@ generally in the handbook MCP abstract roles ADR.
 
 ## Tool catalog
 
-(Filled in as tools land. Each row is also reflected in
-[`README.md`](README.md) § Tools.)
+Each row is also reflected in [`README.md`](README.md) § Tools.
 
-| Tool | Underlying API call | Input shape | Output shape | Required scope | Notes |
+| Tool | Underlying API call | Input | Output | Scope | Notes |
 |---|---|---|---|---|---|
-| _(stub — first ship is `m365-graph:list_drives`)_ | | | | | |
+| `m365-graph:list_drives` | `GET /me/drive`, `GET /me/drives` | _(none)_ | `{ primary, accessible: [] }` | `Files.Read` | First-ship; validates the auth + Graph plumbing end-to-end. |
+| `m365-graph:list_items` | `GET /me/drive/root/children` or `GET /drives/{id}/items/{item}/children` | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` | `Files.Read` | Item type derived from presence of `folder` facet. `child_count` populated only for folders. |
+| `m365-graph:search_files` | `GET /drives/{id}/root/search(q='…')` (defaults to `/me/drive`) | `query`, `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with virtual `path` joining `parentReference.path` + `name` | `Files.Read` | OData function call; query single quotes are escaped (`'` → `''`). |
+| `m365-graph:download_file` | `GET /me/drive/items/{id}` for metadata, then `GET @microsoft.graph.downloadUrl` (Graph CDN) for the bytes | `item_id`, `drive_id?` | `{ local_path, size_bytes, name, content_type }` | `Files.Read` | **Sandboxed**: writes only under `<sandbox>/<tenant>/<sha256(item_id)[:16]>-<sanitized name>`. Streamed via fetch + Node `pipeline`; no whole-file buffering. 200 MB cap, refused pre-fetch via metadata size. Folders rejected. |
+
+### Download sandboxing
+
+The `download_file` tool writes to a sandbox directory determined by:
+
+1. `M365_DOWNLOAD_DIR` env var (override) → `<override>/<tenant-id>/`
+2. else `XDG_CACHE_HOME` → `<XDG_CACHE_HOME>/m365-graph-mcp-server/<tenant-id>/`
+3. else default → `~/.cache/m365-graph-mcp-server/<tenant-id>/`
+
+Local filenames are server-constructed: `<sha256(item_id)[:16]>-<sanitized name>`,
+NOT derived from caller-supplied paths (handbook anti-pattern #1
+mitigation). Path injection via `item_id` is structurally impossible
+because the agent never sees raw filesystem paths in the input. As
+defense-in-depth, the resolved path is verified to start with the
+sandbox root before writing.
+
+Mode: dirs `0o700`, files `0o600` so other users on a shared host
+can't read downloaded content.
+
+## Input validation
+
+Every tool validates its inputs via helpers in
+[`src/types/validators.ts`](src/types/validators.ts):
+
+- `validateRequiredString(v, name)` — non-empty string or throw
+- `validateOptionalString(v, name)` — `string | undefined`
+- `validateOptionalInteger(v, name, {min, max, default})` — bounded
+- `sanitizeFilename(name)` — strips `/`, `\`, `\0`, leading dots; caps at 200 chars
+
+Naming convention: every helper starts with `validate*` or
+`sanitize*` so the [CI dead-code grep](https://github.com/juvantlabs/handbook/blob/main/docs/repo-types/mcp-server.md#ci-requirements)
+enforces it's imported in at least one other file. Defense-in-depth
+helpers that are never wired into a real handler are flagged as a
+security smell (handbook anti-pattern S1).
 
 ## Dependencies
 
 | Dependency | Version | Why |
 |---|---|---|
 | `@modelcontextprotocol/sdk` | `^1.25.2` | MCP framing; ≥1.25.2 required (ReDoS + DNS rebinding fixes — audit C7) |
-| `@microsoft/microsoft-graph-client` | (TBD on first auth-tool ship) | Microsoft's official Graph SDK — handles batching, retries, types |
-| `@azure/msal-node` | (TBD on first auth-tool ship) | OAuth — never roll auth |
-| `@napi-rs/keyring` | (TBD on first auth-tool ship) | OS keychain for token persistence; replaces archived `keytar` |
+| `@microsoft/microsoft-graph-client` | `^3.0.7` | Microsoft's official Graph SDK — handles batching, retries, types |
+| `@azure/msal-node` | `^5.0.0` | OAuth — never roll auth. v5+ avoids transitive `uuid <14` GHSA-w5hq-g745-h8pq. |
+| `@napi-rs/keyring` | `^1.3.0` | OS keychain for token persistence; replaces archived `keytar`. |
+| `isomorphic-fetch` | `^3.0.0` | Peer dep of the Graph SDK. |
 
 ## References
 
