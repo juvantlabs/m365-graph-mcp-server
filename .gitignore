@@ -14,6 +14,9 @@ pnpm-debug.log*
 *.env.*
 .env.local
 .env.*.local
+# .env.example IS committed — public template documenting the
+# required env-var shape with placeholder values.
+!.env.example
 
 # Key material — defense-in-depth
 *.pem
