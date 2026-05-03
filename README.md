@@ -71,12 +71,53 @@ for the abstract role this server fulfills + the canonical config shape.
 
 ## Tools
 
-(None yet — implement under `src/tools/<tool-name>.ts` and register in
-`src/index.ts`.)
+| Tool | Purpose | Input | Output | Required scope |
+|---|---|---|---|---|
+| `m365-graph:list_drives` | Lists the drives the authenticated user has access to (primary OneDrive + shared SharePoint document libraries). Read-only. | _(none)_ | JSON: `{ primary, accessible: [] }` with id / driveType / name / webUrl / owner per drive. | `Files.Read` (delegated) |
 
-| Tool | Purpose | Input | Output |
-|---|---|---|---|
-| _(stub)_ | _(fill in as tools land)_ | | |
+More tools land via PR — search, list items, download, upload, copy/move,
+calendar reads + writes. See [`ARCHITECTURE.md`](ARCHITECTURE.md) §
+Tool catalog.
+
+## Local development
+
+The repo expects a `.env.local` file with your tenant's credentials.
+Bootstrap from the template:
+
+```bash
+cp .env.example .env.local
+# then edit .env.local with your M365_TENANT_ID, M365_CLIENT_ID,
+# and M365_CLIENT_SECRET — see ARCHITECTURE.md § Authentication
+# for the Entra app registration flow.
+```
+
+`.env.local` is gitignored.
+
+### One-time OAuth setup
+
+The first time you run the server, you need to complete an OAuth flow
+to populate the OS keychain with refresh tokens:
+
+```bash
+npm run setup
+```
+
+This opens your browser, signs you in to your tenant, captures the
+authorization code via a one-shot listener at
+`http://localhost:3000/auth/callback`, and persists the resulting
+tokens via `@napi-rs/keyring` (macOS Keychain / Linux Secret Service /
+Windows Credential Manager). After that, the server uses cached
+tokens silently — refreshes as needed via the cached refresh grant.
+
+### Run the MCP server
+
+```bash
+npm run dev
+```
+
+Listens on stdio. Useful when developing alongside an MCP client like
+Claude Code: configure the client to spawn `npm run dev` (or
+`tsx --env-file=.env.local src/index.ts`) as its MCP server command.
 
 ## Architecture
 
