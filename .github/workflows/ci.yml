@@ -27,7 +27,11 @@ jobs:
       - name: Type-check
         run: npm run typecheck
 
-      - name: Unit tests + coverage
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Coverage (only when tests exist)
+        if: ${{ hashFiles('tests/unit/**/*.test.ts') != '' }}
         run: npm run test:unit -- --coverage
 
       - name: Integration tests
