@@ -4,6 +4,7 @@ import {
   sanitizeFilename,
   validateOptionalInteger,
   validateOptionalString,
+  validateRequiredISODate,
   validateRequiredString,
 } from "../../src/types/validators.js";
 
@@ -135,5 +136,42 @@ describe("sanitizeFilename", () => {
     const result = sanitizeFilename("../../etc/passwd");
     expect(result).not.toContain("/");
     expect(result.startsWith(".")).toBe(false);
+  });
+});
+
+describe("validateRequiredISODate", () => {
+  it("accepts a date-only ISO string", () => {
+    expect(validateRequiredISODate("2026-05-04", "f")).toBe("2026-05-04");
+  });
+
+  it("accepts a datetime with Z timezone", () => {
+    expect(validateRequiredISODate("2026-05-04T10:00:00Z", "f")).toBe("2026-05-04T10:00:00Z");
+  });
+
+  it("accepts a datetime with offset timezone", () => {
+    expect(validateRequiredISODate("2026-05-04T10:00:00+01:00", "f")).toBe(
+      "2026-05-04T10:00:00+01:00",
+    );
+  });
+
+  it("accepts a datetime with milliseconds", () => {
+    const s = "2026-05-04T10:00:00.123Z";
+    expect(validateRequiredISODate(s, "f")).toBe(s);
+  });
+
+  it.each([
+    "yesterday",
+    "2026/05/04",
+    "May 4 2026",
+    "abc",
+    "",
+  ])("rejects malformed input: %s", (bad) => {
+    expect(() => validateRequiredISODate(bad, "f")).toThrow();
+  });
+
+  it("delegates to validateRequiredString for non-string inputs", () => {
+    expect(() => validateRequiredISODate(undefined, "f")).toThrow(
+      "'f' must be a non-empty string",
+    );
   });
 });

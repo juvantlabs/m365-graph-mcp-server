@@ -3,12 +3,18 @@ import { describe, expect, it } from "vitest";
 import { ALL_TOOLS, buildHandlerMap } from "../../src/tools/index.js";
 
 describe("ALL_TOOLS registry", () => {
-  it("includes all four read-block tools", () => {
+  it("includes all read-block tools (files + calendars)", () => {
     const names = ALL_TOOLS.map((t) => t.definition.name);
+    // Files
     expect(names).toContain("m365-graph:list_drives");
     expect(names).toContain("m365-graph:list_items");
     expect(names).toContain("m365-graph:search_files");
     expect(names).toContain("m365-graph:download_file");
+    // Calendars
+    expect(names).toContain("m365-graph:list_calendars");
+    expect(names).toContain("m365-graph:list_events");
+    expect(names).toContain("m365-graph:search_events");
+    expect(names).toContain("m365-graph:get_event");
   });
 
   it("each tool has a non-empty name + description", () => {

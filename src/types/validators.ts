@@ -46,6 +46,30 @@ export function validateOptionalInteger(
   return value;
 }
 
+const ISO_DATE_LOOKS_LIKE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+/**
+ * Lightweight ISO 8601 date/datetime check. Accepts:
+ *   - YYYY-MM-DD
+ *   - YYYY-MM-DDTHH:MM
+ *   - YYYY-MM-DDTHH:MM:SS
+ *   - YYYY-MM-DDTHH:MM:SS.sss
+ * with optional Z or ±HH:MM timezone offset.
+ *
+ * Microsoft Graph does the strict parsing; we just guard against
+ * obviously-wrong inputs so the agent gets a near-the-input error
+ * rather than a cryptic Graph 400.
+ */
+export function validateRequiredISODate(value: unknown, fieldName: string): string {
+  const s = validateRequiredString(value, fieldName);
+  if (!ISO_DATE_LOOKS_LIKE.test(s)) {
+    throw new Error(
+      `'${fieldName}' must be an ISO 8601 date or datetime (e.g. '2026-05-04' or '2026-05-04T10:00:00Z'); got ${JSON.stringify(s)}`,
+    );
+  }
+  return s;
+}
+
 /**
  * Strip path-traversal-dangerous characters from a filename. Used
  * before constructing a local FS path that includes a server-supplied

@@ -33,6 +33,28 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - First read tool `m365-graph:list_drives` under `src/tools/`. Returns
   the user's primary OneDrive plus other drives (shared SharePoint
   document libraries) accessible to them.
+- Calendar read block — four tools under the existing `Calendars.Read`
+  delegated scope (no new Entra app permissions required):
+  - `m365-graph:list_calendars` — list user calendars (primary + group
+    + shared) via `/me/calendars`. Returns id / name / color / owner /
+    is_default / can_edit / can_share per calendar.
+  - `m365-graph:list_events` — events in a date window via
+    `/me/calendarView` (or `/me/calendars/{id}/calendarView`) with
+    `startDateTime` + `endDateTime` query params. **Recurrences are
+    expanded** — each occurrence is its own event in the response.
+    Ordered by start/dateTime ascending.
+  - `m365-graph:search_events` — subject-substring search via
+    `$filter=contains(subject, '…')`. `$search` is not supported on
+    the Events resource by Graph; body search would require the
+    Search API (POST /search/query, deferred). Returns series masters
+    for recurring events.
+  - `m365-graph:get_event` — full event details via `/me/events/{id}`.
+    Body content capped at 8000 chars with `body_truncated` flag.
+    Includes recurrence rule when present.
+- New `validateRequiredISODate` validator with regex-based ISO 8601
+  shape check (date-only or full datetime, with optional Z or ±HH:MM
+  offset). Catches obviously-wrong inputs near the source; Graph does
+  the strict parse.
 - Three additional read tools, all under the `Files.Read` delegated
   scope:
   - `m365-graph:list_items` — list children of a folder (drive root or
@@ -72,14 +94,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Tested
 
-- Vitest unit tests covering all four read tools plus the validator
-  helpers + the tool registry. 70 tests across 6 files. Per-file
-  coverage thresholds (lines/functions/statements ≥ 80%, branches
-  ≥ 50% pending fs+fetch mocking) pass for every file in the
-  configured coverage scope (`src/types/validators.ts` + `src/tools/**`).
-  `src/index.ts`, `src/auth/**`, `src/client/**` are deferred to
-  integration tests — adding them to coverage scope as their unit
-  tests land.
+- Vitest unit tests covering all eight read tools + validator helpers
+  + tool registry. 106 tests across 10 files. Per-file coverage
+  thresholds (lines/functions/statements ≥ 80%, branches ≥ 50%
+  pending fs+fetch mocking on download_file) pass for every file in
+  the configured coverage scope (`src/types/validators.ts` +
+  `src/tools/**`). All tools at 100% line coverage; branches between
+  52–100%. `src/index.ts`, `src/auth/**`, `src/client/**` are still
+  deferred to integration tests.
 
 ---
 

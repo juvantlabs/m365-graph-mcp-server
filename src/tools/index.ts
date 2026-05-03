@@ -10,15 +10,25 @@
 
 import type { Tool } from "../types/tool.js";
 import { downloadFileTool } from "./download_file.js";
+import { getEventTool } from "./get_event.js";
+import { listCalendarsTool } from "./list_calendars.js";
 import { listDrivesTool } from "./list_drives.js";
+import { listEventsTool } from "./list_events.js";
 import { listItemsTool } from "./list_items.js";
+import { searchEventsTool } from "./search_events.js";
 import { searchFilesTool } from "./search_files.js";
 
 export const ALL_TOOLS: ReadonlyArray<Tool> = [
+  // Files
   listDrivesTool,
   listItemsTool,
   searchFilesTool,
   downloadFileTool,
+  // Calendars
+  listCalendarsTool,
+  listEventsTool,
+  searchEventsTool,
+  getEventTool,
 ];
 
 export function buildHandlerMap(tools: ReadonlyArray<Tool>): Map<string, Tool["handler"]> {

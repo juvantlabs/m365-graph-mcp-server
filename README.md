@@ -78,9 +78,13 @@ for the abstract role this server fulfills + the canonical config shape.
 | `m365-graph:list_items` | Lists immediate children (files + folders) of a folder. Defaults to the drive root. | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` with id / name / type / size / child_count / lastModified / webUrl. | `Files.Read` |
 | `m365-graph:search_files` | Searches files by name and content within a drive. | `query` (required), `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with id / name / path / size / is_folder / lastModified / webUrl. | `Files.Read` |
 | `m365-graph:download_file` | Downloads a file to a per-tenant local sandbox. Returns the local path; agent reads via a filesystem-aware tool. Streams, capped at 200 MB. | `item_id` (required), `drive_id?` | `{ local_path, size_bytes, name, content_type }` | `Files.Read` |
+| `m365-graph:list_calendars` | Lists the user's calendars (primary + group / shared). | `limit?` (1–100, default 50) | `{ count, calendars: [] }` with id / name / color / owner / is_default / can_edit / can_share. | `Calendars.Read` |
+| `m365-graph:list_events` | Lists events in a date window. Recurrences are expanded — each occurrence is its own event. | `start` + `end` (ISO 8601, required), `calendar_id?`, `limit?` (1–200, default 100) | `{ window, count, events: [] }` with id / subject / start / end / location / organizer / attendees / web_url. | `Calendars.Read` |
+| `m365-graph:search_events` | Searches events by subject substring (Graph $search isn't supported on Events; subject-only via `contains()`). Returns recurrence series masters, not occurrences. | `query` (required), `limit?` (1–50, default 20) | `{ count, results: [] }` (same event shape). | `Calendars.Read` |
+| `m365-graph:get_event` | Fetches full details for a single event — body (capped at 8000 chars), attendees with response statuses, location, recurrence rule. | `event_id` (required) | event summary + `body` / `body_content_type` / `body_truncated` / `recurrence`. | `Calendars.Read` |
 
 More tools land via PR — upload, copy/move (async polling), delete (with
-spec/approval pattern), calendar reads + writes. See
+spec/approval pattern), calendar writes (create/update/cancel). See
 [`ARCHITECTURE.md`](ARCHITECTURE.md) § Tool catalog.
 
 ## Local development
