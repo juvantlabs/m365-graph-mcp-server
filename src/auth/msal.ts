@@ -27,10 +27,14 @@ import { getTokenStore } from "./keyring.js";
  * Calendars.ReadWrite for calendar write tools, etc. (per handbook spec
  * § Auth › Scopes: per-tool minimum, justified in ARCHITECTURE.md).
  */
+// Files.ReadWrite subsumes Files.Read; Calendars.ReadWrite subsumes
+// Calendars.Read. The Entra app permissions list still includes the
+// narrower scopes (granted earlier) — they're harmless, just not
+// requested at token acquisition time.
 export const DELEGATED_SCOPES = [
   "User.Read",
-  "Files.Read",
-  "Calendars.Read",
+  "Files.ReadWrite",
+  "Calendars.ReadWrite",
   "offline_access",
 ];
 

@@ -33,6 +33,34 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - First read tool `m365-graph:list_drives` under `src/tools/`. Returns
   the user's primary OneDrive plus other drives (shared SharePoint
   document libraries) accessible to them.
+- Write block, round 1 — three tools requiring Files.ReadWrite +
+  Calendars.ReadWrite delegated scopes (extended in Entra app
+  permissions, admin consent re-granted, OAuth re-run):
+  - `m365-graph:upload_file` — uploads a local file to a drive.
+    Auto-routes between single PUT (`PUT /items/{parent}:/{name}:/content`,
+    files ≤ 4 MB) and resumable upload session
+    (`OneDriveLargeFileUploadTask` with 10 MB chunks, files > 4 MB).
+    200 MB hard cap. Conflict behavior parametric (`fail` default,
+    `replace`, `rename`). Trust note: agent supplies `local_path`;
+    the absolute path is logged to stderr.
+  - `m365-graph:create_event` — `POST /me/events`. Subject + start +
+    end required; timezone defaults to UTC. Optional body (text/html),
+    location, attendees (with type ∈ {required, optional, resource}),
+    is_all_day. Graph sends invitations by default.
+  - `m365-graph:update_event` — `PATCH /me/events/{id}`. All fields
+    except event_id optional; only provided fields are PATCHed. Empty
+    patch is rejected. Attendees are REPLACED (Graph semantics, not
+    merged).
+- DELEGATED_SCOPES updated: `Files.Read` + `Calendars.Read` →
+  `Files.ReadWrite` + `Calendars.ReadWrite` (the wider scopes subsume
+  the narrower; the Entra app permissions list still includes both
+  for granted-permission tracking).
+- New `validateOptionalEnum<T>(value, name, allowed, default)` validator
+  for parametric strings (conflict_behavior, attendee.type,
+  body_content_type).
+- `checkSizeCap(size)` extracted from upload_file's handler so the
+  200-MB defense-in-depth can be unit-tested independently of fs +
+  Graph integration.
 - Calendar read block — four tools under the existing `Calendars.Read`
   delegated scope (no new Entra app permissions required):
   - `m365-graph:list_calendars` — list user calendars (primary + group
@@ -85,10 +113,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Pending
 
-- Write tools: `upload_file` (small + resumable), `copy/move` (with
-  async polling), `delete` (with spec/approval pattern). Require
-  expanding the Entra app permissions to `Files.ReadWrite`.
-- Calendar tools (list, create, update, cancel, search).
+- Write tools, round 2: `copy_file` / `move_file` (require async
+  polling against monitor URL until completion); `delete_file` /
+  `cancel_event` (require spec/approval confirmation-token pattern
+  per handbook ADR 0002).
+- Body-content event search via Search API (POST `/search/query`,
+  separate beast).
+- Mock-based unit tests for `src/auth/**`, `src/client/**`, and
+  `src/index.ts` to push coverage scope to the entire repo.
 - Integration tests against a live tenant once sandbox tokens are
   available in CI.
 

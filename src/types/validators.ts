@@ -48,6 +48,21 @@ export function validateOptionalInteger(
 
 const ISO_DATE_LOOKS_LIKE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
+export function validateOptionalEnum<T extends string>(
+  value: unknown,
+  fieldName: string,
+  allowed: ReadonlyArray<T>,
+  defaultValue: T,
+): T {
+  if (value === undefined || value === null) return defaultValue;
+  if (typeof value !== "string" || !(allowed as ReadonlyArray<string>).includes(value)) {
+    throw new Error(
+      `'${fieldName}' must be one of ${JSON.stringify(allowed)}; got ${JSON.stringify(value)}`,
+    );
+  }
+  return value as T;
+}
+
 /**
  * Lightweight ISO 8601 date/datetime check. Accepts:
  *   - YYYY-MM-DD

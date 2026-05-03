@@ -82,9 +82,12 @@ for the abstract role this server fulfills + the canonical config shape.
 | `m365-graph:list_events` | Lists events in a date window. Recurrences are expanded — each occurrence is its own event. | `start` + `end` (ISO 8601, required), `calendar_id?`, `limit?` (1–200, default 100) | `{ window, count, events: [] }` with id / subject / start / end / location / organizer / attendees / web_url. | `Calendars.Read` |
 | `m365-graph:search_events` | Searches events by subject substring (Graph $search isn't supported on Events; subject-only via `contains()`). Returns recurrence series masters, not occurrences. | `query` (required), `limit?` (1–50, default 20) | `{ count, results: [] }` (same event shape). | `Calendars.Read` |
 | `m365-graph:get_event` | Fetches full details for a single event — body (capped at 8000 chars), attendees with response statuses, location, recurrence rule. | `event_id` (required) | event summary + `body` / `body_content_type` / `body_truncated` / `recurrence`. | `Calendars.Read` |
+| `m365-graph:upload_file` | Uploads a local file to a drive. Auto-routes between single PUT (≤ 4 MB) and resumable upload session (> 4 MB, 10 MB chunks). 200 MB hard cap. | `local_path` (required), `drive_id?`, `parent_item_id?`, `name?`, `conflict_behavior?` (`fail`/`replace`/`rename`, default `fail`) | `{ uploaded: { id, name, size, webUrl, upload_path } }` | `Files.ReadWrite` |
+| `m365-graph:create_event` | Creates a new event on the user's primary calendar (or a specified calendar). Sends invitations to attendees by Graph default. | `subject` + `start` + `end` (required), `timezone?` (default UTC), `body?`, `body_content_type?` (`text`/`html`), `location?`, `attendees?`, `is_all_day?`, `calendar_id?` | `{ created: <event summary> }` | `Calendars.ReadWrite` |
+| `m365-graph:update_event` | Updates an existing event. All fields except `event_id` are optional; only provided fields are PATCHed. **Attendees: full replacement, not merge** — pass the full intended list. | `event_id` (required), then any subset of `subject`/`start`+`end`+`timezone`/`body`+`body_content_type`/`location`/`attendees`/`is_all_day` | `{ updated: <event summary> }` | `Calendars.ReadWrite` |
 
-More tools land via PR — upload, copy/move (async polling), delete (with
-spec/approval pattern), calendar writes (create/update/cancel). See
+More tools land via PR — copy/move (async polling), delete (with
+spec/approval pattern), cancel_event. See
 [`ARCHITECTURE.md`](ARCHITECTURE.md) § Tool catalog.
 
 ## Local development
