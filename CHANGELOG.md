@@ -67,10 +67,19 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   async polling), `delete` (with spec/approval pattern). Require
   expanding the Entra app permissions to `Files.ReadWrite`.
 - Calendar tools (list, create, update, cancel, search).
-- Vitest unit tests covering the per-tool `summarize*` helpers,
-  validator helpers, and the dispatcher pure-logic paths;
-  integration tests against a live tenant once sandbox tokens are
+- Integration tests against a live tenant once sandbox tokens are
   available in CI.
+
+### Tested
+
+- Vitest unit tests covering all four read tools plus the validator
+  helpers + the tool registry. 70 tests across 6 files. Per-file
+  coverage thresholds (lines/functions/statements ≥ 80%, branches
+  ≥ 50% pending fs+fetch mocking) pass for every file in the
+  configured coverage scope (`src/types/validators.ts` + `src/tools/**`).
+  `src/index.ts`, `src/auth/**`, `src/client/**` are deferred to
+  integration tests — adding them to coverage scope as their unit
+  tests land.
 
 ---
 

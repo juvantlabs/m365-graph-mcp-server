@@ -61,7 +61,7 @@ interface DriveItemSummary {
   webUrl: string;
 }
 
-function summarizeDriveItem(item: Record<string, unknown>): DriveItemSummary {
+export function summarizeDriveItem(item: Record<string, unknown>): DriveItemSummary {
   const folder = item.folder as Record<string, unknown> | undefined;
   return {
     id: String(item.id ?? ""),

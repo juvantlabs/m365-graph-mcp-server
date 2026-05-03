@@ -61,7 +61,7 @@ interface SearchHit {
   webUrl: string;
 }
 
-function summarizeSearchHit(item: Record<string, unknown>): SearchHit {
+export function summarizeSearchHit(item: Record<string, unknown>): SearchHit {
   const parentRef = item.parentReference as Record<string, unknown> | undefined;
   const parentPath = (parentRef?.path as string | undefined) ?? "";
   const name = String(item.name ?? "");

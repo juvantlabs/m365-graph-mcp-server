@@ -37,7 +37,7 @@ interface DriveSummary {
   owner: string | null;
 }
 
-function summarizeDrive(drive: Record<string, unknown>): DriveSummary {
+export function summarizeDrive(drive: Record<string, unknown>): DriveSummary {
   const owner = drive.owner as Record<string, unknown> | undefined;
   const ownerUser = owner?.user as Record<string, unknown> | undefined;
   const ownerGroup = owner?.group as Record<string, unknown> | undefined;

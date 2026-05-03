@@ -79,7 +79,7 @@ const definition: ToolDefinition = {
   },
 };
 
-function getSandboxRoot(tenantId: string): string {
+export function getSandboxRoot(tenantId: string): string {
   const override = process.env.M365_DOWNLOAD_DIR;
   if (override) return path.resolve(override, tenantId);
 
@@ -89,7 +89,7 @@ function getSandboxRoot(tenantId: string): string {
   return path.resolve(os.homedir(), ".cache", "m365-graph-mcp-server", tenantId);
 }
 
-function deriveSafeLocalPath(sandboxRoot: string, itemId: string, originalName: string): string {
+export function deriveSafeLocalPath(sandboxRoot: string, itemId: string, originalName: string): string {
   const itemHash = crypto.createHash("sha256").update(itemId).digest("hex").slice(0, 16);
   const safe = sanitizeFilename(originalName);
   const filename = `${itemHash}-${safe}`;
