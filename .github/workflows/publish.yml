@@ -17,7 +17,10 @@ jobs:
       url: https://www.npmjs.com/package/${{ github.event.repository.name }}
     permissions:
       contents: read
-      id-token: write   # required for npm provenance
+      # id-token: write enables both:
+      #   - npm provenance attestation (signature on the published tarball)
+      #   - npm Trusted Publishing (OIDC-based auth — no NPM_TOKEN needed)
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +49,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish to npm (with provenance)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm (Trusted Publishing + provenance)
+        # No NODE_AUTH_TOKEN. Authentication is via OIDC: npm verifies
+        # the GitHub Actions OIDC token's claims (repo, workflow,
+        # environment) match the trusted publisher registered for this
+        # package on npmjs.com. Migrated from a granular access token
+        # (NPM_TOKEN) to Trusted Publishing on 2026-05-04 — no static
+        # secret to rotate, scope tied to this exact (repo, workflow,
+        # environment) tuple.
         run: npm publish --access=public --provenance

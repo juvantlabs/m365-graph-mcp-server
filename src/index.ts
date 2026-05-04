@@ -99,7 +99,7 @@ async function runMcpServer(): Promise<void> {
   const server = new Server(
     {
       name: "@juvantlabs/m365-graph-mcp-server",
-      version: "0.1.1",
+      version: "0.1.2",
     },
     {
       capabilities: { tools: {} },

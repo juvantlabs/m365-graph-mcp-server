@@ -9,7 +9,31 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [0.1.2] - 2026-05-04
+
+### Changed
+
+- Publish workflow migrated from granular access token (`NPM_TOKEN`)
+  to npm **Trusted Publishing** (OIDC-based auth). No long-lived
+  secret in the repo; npm verifies the GitHub OIDC token's claims
+  (repo `juvantlabs/m365-graph-mcp-server`, workflow `publish.yml`,
+  environment `production`) match the trusted publisher registered on
+  npmjs.com. Provenance attestation flow unchanged.
+
+## [0.1.1] - 2026-05-04
+
+### Fixed
+
+- Symlink-safe entrypoint guard in `src/index.ts`. v0.1.0 silently
+  no-op'd under `npx @juvantlabs/m365-graph-mcp-server` because the
+  `process.argv[1].endsWith("dist/index.js")` heuristic returned
+  false for the npm `bin` symlink (`node_modules/.bin/<name>` →
+  `dist/index.js`, no `.js` suffix on argv[1]). Replaced with
+  `realpathSync(argv[1]) + pathToFileURL` comparison against
+  `import.meta.url`. Same fix backported to the scaffolder template
+  at `juvantlabs/juvant-tools` v0.3.3 with a regression test.
+
+## [0.1.0] - 2026-05-04
 
 ### Added
 

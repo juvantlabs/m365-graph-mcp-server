@@ -1,6 +1,6 @@
 {
   "name": "@juvantlabs/m365-graph-mcp-server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Microsoft Graph MCP server — OneDrive, SharePoint, and Calendar read+write for Juvant OS agents.",
   "license": "MIT",
   "author": "Juvant Srls",
