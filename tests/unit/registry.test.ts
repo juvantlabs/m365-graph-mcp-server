@@ -19,11 +19,13 @@ describe("ALL_TOOLS registry", () => {
     expect(names).toContain("m365-graph:list_calendars");
     expect(names).toContain("m365-graph:list_events");
     expect(names).toContain("m365-graph:search_events");
+    expect(names).toContain("m365-graph:search_events_content");
     expect(names).toContain("m365-graph:get_event");
     // Calendars — write
     expect(names).toContain("m365-graph:create_event");
     expect(names).toContain("m365-graph:update_event");
     expect(names).toContain("m365-graph:cancel_event");
+    expect(names).toContain("m365-graph:decline_event");
   });
 
   it("each tool has a non-empty name + description", () => {

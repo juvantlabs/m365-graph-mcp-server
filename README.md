@@ -88,12 +88,16 @@ for the abstract role this server fulfills + the canonical config shape.
 | `m365-graph:copy_file` | Async copy with polling. POSTs to `/items/{id}/copy`, polls the monitor URL with exponential backoff (1s → 2s → … capped at 30s) until completion. Falls back to `list-by-name` if the monitor's completed response omits `resourceLocation` (common Graph quirk). | `item_id` + `target_parent_id` (required); `source_drive_id?`, `target_drive_id?`, `new_name?`, `wait_max_seconds?` (1–1800, default 300) | `{ status: "completed", copied: { id, name, ... } }` | `Files.ReadWrite` |
 | `m365-graph:move_file` | Synchronous move within a drive (PATCH parentReference). Cross-drive moves are not supported here — use copy_file + delete_file for those. | `item_id` + `target_parent_id` (required); `drive_id?`, `new_name?` | `{ moved: { id, name, ... } }` | `Files.ReadWrite` |
 | `m365-graph:delete_file` | **Two-phase** spec/approval: 1st call returns preview + `confirmation_token`; 2nd call (same args + token) executes the DELETE. Token single-use, 5 min expiry, tied to exact spec (canonical-JSON SHA-256). | `item_id` (required), `drive_id?`, `confirmation_token?` | preview `{ item, confirmation_token, expires_at }` or execute `{ deleted: { ... } }` | `Files.ReadWrite` |
-| `m365-graph:cancel_event` | **Two-phase** like delete_file. Cancels a meeting the user organizes (sends cancellation notice to attendees). For declining as an attendee, decline in Outlook (separate Graph endpoint, not yet wrapped). | `event_id` (required), `comment?`, `confirmation_token?` | preview or `{ cancelled: { event_id } }` | `Calendars.ReadWrite` |
+| `m365-graph:cancel_event` | **Two-phase** like delete_file. Cancels a meeting the user organizes (sends cancellation notice to attendees). | `event_id` (required), `comment?`, `confirmation_token?` | preview or `{ cancelled: { event_id } }` | `Calendars.ReadWrite` |
+| `m365-graph:decline_event` | **Two-phase**. Declines an event the user is invited to (as attendee — distinct from cancel which is for events the user organizes). Sends a decline RSVP unless `send_response: false`. | `event_id` (required), `comment?`, `send_response?` (default `true`), `confirmation_token?` | preview or `{ declined: { event_id, send_response } }` | `Calendars.ReadWrite` |
+| `m365-graph:search_events_content` | Subject + **body** content search via the Microsoft Search API (POST `/search/query`). Distinct from `search_events` (subject-only via `$filter`). Returns recurrence series masters; for occurrences in a window use `list_events`. | `query` (required), `limit?` (1–50, default 25), `from?` (pagination offset, default 0) | `{ count, total, results: [<event summary>] }` | `Calendars.Read` |
 
-That's the full FEAT-014 surface today: 4 read tools + 4 write tools on
-files, 4 read tools + 3 write tools on calendars (15 total). Body-content
-event search via the Search API and mock-based unit tests for
-auth/index.ts are the remaining roadmap items before npm publish.
+That's the full FEAT-014 surface: 4 read + 4 write on files, 5 read +
+4 write on calendars — **17 tools total**. Read tools all exercise
+delegated `Files.Read` + `Calendars.Read` (granted by default in the
+narrower `*.Read` permissions); write tools require `Files.ReadWrite`
++ `Calendars.ReadWrite` (separately granted in the Entra app +
+admin-consented).
 
 ## Local development
 

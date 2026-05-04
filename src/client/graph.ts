@@ -21,7 +21,16 @@ import type { ConfidentialClientApplication } from "@azure/msal-node";
 
 import { getAccessToken } from "../auth/msal.js";
 
-class MsalAuthProvider implements AuthenticationProvider {
+/**
+ * Authentication provider that bridges MSAL's token cache → the
+ * Microsoft Graph client. Each Graph request triggers
+ * `getAccessToken()`, which lets MSAL refresh transparently if the
+ * cached token is expired.
+ *
+ * Exported so tests can verify the bridge without instantiating the
+ * full Graph client.
+ */
+export class MsalAuthProvider implements AuthenticationProvider {
   constructor(private readonly msal: ConfidentialClientApplication) {}
 
   async getAccessToken(_options?: AuthenticationProviderOptions): Promise<string> {

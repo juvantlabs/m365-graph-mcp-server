@@ -24,9 +24,11 @@ import { getEventTool } from "./get_event.js";
 import { listCalendarsTool } from "./list_calendars.js";
 import { listEventsTool } from "./list_events.js";
 import { searchEventsTool } from "./search_events.js";
+import { searchEventsContentTool } from "./search_events_content.js";
 // Calendars — write
 import { cancelEventTool } from "./cancel_event.js";
 import { createEventTool } from "./create_event.js";
+import { declineEventTool } from "./decline_event.js";
 import { updateEventTool } from "./update_event.js";
 
 export const ALL_TOOLS: ReadonlyArray<Tool> = [
@@ -44,11 +46,13 @@ export const ALL_TOOLS: ReadonlyArray<Tool> = [
   listCalendarsTool,
   listEventsTool,
   searchEventsTool,
+  searchEventsContentTool,
   getEventTool,
   // Calendars — write
   createEventTool,
   updateEventTool,
   cancelEventTool,
+  declineEventTool,
 ];
 
 export function buildHandlerMap(tools: ReadonlyArray<Tool>): Map<string, Tool["handler"]> {

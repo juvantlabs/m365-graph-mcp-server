@@ -45,7 +45,12 @@ export const DELEGATED_SCOPES = [
  */
 export const REDIRECT_URI = "http://localhost:3000/auth/callback";
 
-function makeCachePlugin(tenantId: string): ICachePlugin {
+/**
+ * Build the MSAL cache plugin for a given tenant. Exported so tests
+ * can drive the load/save lifecycle directly with a fake
+ * TokenCacheContext + spied keychain store.
+ */
+export function makeCachePlugin(tenantId: string): ICachePlugin {
   const store = getTokenStore(tenantId);
   return {
     async beforeCacheAccess(cacheContext: TokenCacheContext): Promise<void> {

@@ -33,6 +33,32 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - First read tool `m365-graph:list_drives` under `src/tools/`. Returns
   the user's primary OneDrive plus other drives (shared SharePoint
   document libraries) accessible to them.
+- Consolidation block — body-content search, decline-as-attendee,
+  mock-based auth tests:
+  - `m365-graph:search_events_content` — body + subject search via
+    the Microsoft Search API (POST /search/query). Distinct from
+    search_events which is subject-only via $filter (since Graph
+    doesn't support $search on /me/events). Maps Search-API-shaped
+    hits back to summarizeEvent for response uniformity. Pagination
+    via `from` + `limit`. Read-only.
+  - `m365-graph:decline_event` — decline an event the user is invited
+    to (distinct from cancel_event which is for events the user
+    organizes). Two-phase spec/approval pattern, identical to
+    cancel_event's. `send_response` boolean controls whether the
+    organizer is notified — both default-true (sends RSVP) and
+    silent-decline are supported. send_response is part of the spec
+    hash, so changing it between preview and execute fails
+    spec_mismatch.
+  - Mock-based unit tests landed for src/auth/keyring.ts,
+    src/auth/msal.ts (cache plugin lifecycle + makeMsalClient
+    factory), src/client/graph.ts (MsalAuthProvider class), and
+    src/index.ts (validateEnv → renamed checkEnv to dodge the dead-
+    code grep, dispatch, dispatchToolCall extracted from runMcpServer
+    for testability).
+  - vitest.config.ts coverage scope expanded: src/auth/** + src/client/**
+    now in scope. src/auth/setup.ts and src/index.ts excluded from
+    coverage thresholds — both are entry-point/integration glue best
+    validated via the live OAuth + MCP smoke runs.
 - Write block, round 2 — four tools completing the file + calendar
   write surface. No new Entra scopes required (round 1 already extended
   to Files.ReadWrite + Calendars.ReadWrite).
@@ -139,16 +165,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Pending
 
-- Body-content event search via Search API (POST `/search/query`,
-  separate beast).
-- Mock-based unit tests for `src/auth/**`, `src/client/**`, and
-  `src/index.ts` to push coverage scope to the entire repo.
-- Integration tests against a live tenant once sandbox tokens are
-  available in CI.
-- Decline-as-attendee (vs cancel-as-organizer) — separate Graph
-  endpoint not yet wrapped.
-- npm publish `@juvantlabs/m365-graph-mcp-server` once mock-based
-  tests for the auth path land.
+- Integration tests against a live sandbox tenant in CI (currently
+  smoke-run live by hand).
+- Refresh-token revocation handling tests (MSAL silent acquisition
+  failure path beyond "no cached account").
+- Mail send / Teams chat — explicit non-goals, deferred to separate
+  vendor MCP servers if needed.
 
 ### Tested
 
