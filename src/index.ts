@@ -14,6 +14,9 @@
  * rules enforce this in `juvantlabs/*-mcp-server` repos.
  */
 
+import { realpathSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -96,7 +99,7 @@ async function runMcpServer(): Promise<void> {
   const server = new Server(
     {
       name: "@juvantlabs/m365-graph-mcp-server",
-      version: "0.1.0",
+      version: "0.1.1",
     },
     {
       capabilities: { tools: {} },
@@ -149,16 +152,30 @@ async function main(): Promise<void> {
   });
 }
 
-// Only run main when invoked directly. Importing the module from tests
-// or other code does NOT trigger startup.
-const invokedDirectly =
-  import.meta.url === `file://${process.argv[1]}` ||
-  // Also handle the tsx/node ESM case where argv[1] is the original .ts
-  import.meta.url.endsWith(process.argv[1] ?? "") ||
-  process.argv[1]?.endsWith("src/index.ts") === true ||
-  process.argv[1]?.endsWith("dist/index.js") === true;
+/**
+ * Detect whether this module is the entry point (vs imported by tests
+ * or other code). When invoked via the `bin` symlink (npm puts the
+ * package's bin into `node_modules/.bin/<name>` as a symlink to
+ * `dist/index.js`), `process.argv[1]` is the symlink path, not the
+ * underlying file. Resolve symlinks via `realpathSync` so the
+ * comparison against `import.meta.url` matches in both cases:
+ *   - Direct invocation: `node dist/index.js`
+ *   - Bin invocation:    `npx @juvantlabs/m365-graph-mcp-server`
+ *   - tsx (dev):         `tsx src/index.ts`
+ *
+ * Also resolves macOS's `/tmp` → `/private/tmp` symlink.
+ */
+function isInvokedAsMain(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    const realPath = realpathSync(process.argv[1]);
+    return import.meta.url === pathToFileURL(realPath).href;
+  } catch {
+    return false;
+  }
+}
 
-if (invokedDirectly) {
+if (isInvokedAsMain()) {
   main().catch((err) => {
     console.error("[m365-graph-mcp-server] fatal:", err);
     process.exit(1);
