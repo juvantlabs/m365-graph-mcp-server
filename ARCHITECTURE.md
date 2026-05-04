@@ -38,11 +38,26 @@ the auth path consolidated.
 
 ### Out of scope
 
+The exclusions below follow the principles formalized in
+[handbook ADR 0003 — Scope boundaries for MCP servers](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0003-mcp-server-scope-boundaries.md):
+this MCP server's tools share a single threat model (side effects
+confined to the user's own drive / calendar, reversible, no external
+broadcast). Capabilities with materially different threat models go
+into separate MCP servers; outbound-only notifications use webhooks
+instead.
+
 - **Mail send** — explicit non-goal for this server. Outbound email is a
   separate concern with its own threat model (SPF / DKIM / DMARC, reply-all
-  blast radius, etc.). If needed, ships as `juvantlabs/m365-mail-mcp-server`.
-- **Teams chat / channel posts** — same reasoning; lives in a separate
-  server when scoped.
+  blast radius, irreversibility). If a Juvant OS use case needs it, ships
+  as `juvantlabs/m365-mail-mcp-server` per ADR 0003 § 1. For agent →
+  human notifications, prefer a webhook (Adaptive Cards, Slack incoming)
+  per ADR 0003 § 2.
+- **Teams chat / channel posts** — same reasoning. Outbound Teams
+  notifications already ship via the `notification.sh` hook in
+  `juvantlabs/juvant-os` using a pre-shared Adaptive Cards webhook URL —
+  no OAuth, no MCP server needed (ADR 0003 § 2). A hypothetical
+  `juvantlabs/m365-teams-mcp-server` would only be built if read-back
+  from Teams chat / interactive posting becomes a real Juvant OS need.
 - **Tenant admin operations** — never automated by the agent layer. These
   remain manual / IT-administered.
 - **General-purpose URL forwarder** — explicitly forbidden by handbook
