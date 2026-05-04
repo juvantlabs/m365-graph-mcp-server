@@ -218,3 +218,4 @@ const handler: ToolHandler = async (
 };
 
 export const copyFileTool: Tool = { definition, handler };
+export { handler as _copyFileHandler };

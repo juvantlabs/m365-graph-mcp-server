@@ -32,6 +32,7 @@ export default defineConfig({
       // the spec target is 80%. Branches is set to 50% for now because
       // the download_file streaming-pipeline branches require mocking
       // fs + fetch (deferred); raise to 80% when those tests land.
+      //
       thresholds: {
         perFile: true,
         lines: 80,
