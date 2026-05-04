@@ -5,19 +5,25 @@ import { ALL_TOOLS, buildHandlerMap } from "../../src/tools/index.js";
 describe("ALL_TOOLS registry", () => {
   it("includes all read + write tools (files + calendars)", () => {
     const names = ALL_TOOLS.map((t) => t.definition.name);
-    // Files
+    // Files — read
     expect(names).toContain("m365-graph:list_drives");
     expect(names).toContain("m365-graph:list_items");
     expect(names).toContain("m365-graph:search_files");
     expect(names).toContain("m365-graph:download_file");
+    // Files — write
     expect(names).toContain("m365-graph:upload_file");
-    // Calendars
+    expect(names).toContain("m365-graph:copy_file");
+    expect(names).toContain("m365-graph:move_file");
+    expect(names).toContain("m365-graph:delete_file");
+    // Calendars — read
     expect(names).toContain("m365-graph:list_calendars");
     expect(names).toContain("m365-graph:list_events");
     expect(names).toContain("m365-graph:search_events");
     expect(names).toContain("m365-graph:get_event");
+    // Calendars — write
     expect(names).toContain("m365-graph:create_event");
     expect(names).toContain("m365-graph:update_event");
+    expect(names).toContain("m365-graph:cancel_event");
   });
 
   it("each tool has a non-empty name + description", () => {

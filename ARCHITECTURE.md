@@ -138,6 +138,37 @@ Each row is also reflected in [`README.md`](README.md) § Tools.
 | `m365-graph:upload_file` | `PUT /items/{parent}:/{name}:/content` (≤ 4 MB) or `OneDriveLargeFileUploadTask` (resumable, 10 MB chunks, > 4 MB) | `local_path`, `drive_id?`, `parent_item_id?`, `name?`, `conflict_behavior?` | `{ uploaded: { id, name, size, webUrl, upload_path } }` | `Files.ReadWrite` | Trust note: `local_path` from the agent; the MCP server reads from the user's filesystem (no sandbox on read — would defeat the upload's purpose). 200 MB cap (`checkSizeCap` defense-in-depth). Absolute path logged to stderr. |
 | `m365-graph:create_event` | `POST /me/events` (or `/me/calendars/{id}/events`) | `subject`, `start`, `end` (required); `timezone?`, `body?`, `body_content_type?`, `location?`, `attendees?`, `is_all_day?`, `calendar_id?` | `{ created: <event summary> }` | `Calendars.ReadWrite` | Timezone defaults to UTC (Graph requires explicit TZ). Attendee.type ∈ {required, optional, resource}. Graph sends invites by default. |
 | `m365-graph:update_event` | `PATCH /me/events/{id}` | `event_id` (required); any subset of subject/start/end/timezone/body/location/attendees/is_all_day | `{ updated: <event summary> }` | `Calendars.ReadWrite` | Empty patch rejected. **Attendees REPLACE, not merge** (Graph semantics) — pass the full intended list. Timezone required when start or end is updated (Graph rejects without TZ). |
+| `m365-graph:copy_file` | `POST /items/{id}/copy` (raw response → 202 + Location) → poll monitor URL → `GET resourceLocation` (or fallback list-by-name) | `item_id`, `target_parent_id`; `source_drive_id?`, `target_drive_id?`, `new_name?`, `wait_max_seconds?` | `{ status: "completed", copied: { id, name, size, webUrl, parent_id } }` | `Files.ReadWrite` | **Async polling** with exponential backoff (1s → 2s → 4s → … capped at 30s). Per handbook anti-pattern S8: never returns "initiated successfully" — always polls to terminal state. Fallback list-by-name handles the Graph quirk where completed monitor responses sometimes omit `resourceLocation`. |
+| `m365-graph:move_file` | `PATCH /me/drive/items/{id}` with `{parentReference: {id}, name?}` | `item_id`, `target_parent_id`; `drive_id?`, `new_name?` | `{ moved: { id, name, ... } }` | `Files.ReadWrite` | Synchronous within a single drive. Cross-drive moves are NOT supported by this PATCH (Graph's documented limitation); use copy + delete for those. |
+| `m365-graph:delete_file` | Phase 1: `GET /items/{id}` → preview. Phase 2: `DELETE /items/{id}` after token consume. | `item_id` (required), `drive_id?`, `confirmation_token?` | preview or `{ deleted }` | `Files.ReadWrite` | **Spec/approval two-phase** per handbook ADR 0002. Token tied to canonical-JSON SHA-256 of the spec; passing a token issued for `{item_id: A}` together with `{item_id: B}` fails with `spec_mismatch`. Single-use, 5 min expiry. |
+| `m365-graph:cancel_event` | Phase 1: `GET /events/{id}` → preview. Phase 2: `POST /events/{id}/cancel { Comment }` after token consume. | `event_id` (required), `comment?`, `confirmation_token?` | preview or `{ cancelled }` | `Calendars.ReadWrite` | Same two-phase pattern as delete_file. The `comment` is part of the spec — changing it between preview and execute fails `spec_mismatch`. |
+
+## Spec/approval confirmation-token pattern
+
+Destructive tools (`delete_file`, `cancel_event`) implement a two-phase
+flow per the handbook MCP server spec § Tool design and ADR 0002 to
+prevent single-shot agent destruction in long autonomous loops:
+
+| Phase | Required args | Tool action |
+|---|---|---|
+| 1 — preview | original args, **no** `confirmation_token` | Fetches a preview of what would be destroyed; issues a token tied to (tool name, canonical-JSON SHA-256 of spec, expiry timestamp). Returns preview + token. |
+| 2 — execute | original args + correct `confirmation_token` | Verifies token (exists, not expired, tied to this exact tool, spec hash matches). Executes the destructive operation. Consumes token (single-use). |
+
+State lives in `src/auth/confirmation_tokens.ts` as a module-level
+`Map<token, {toolName, specHash, expiresAt}>`. Per-tenant subprocess
+per the handbook spec means there's no cross-process leakage; tokens
+expire 5 minutes after issue and are garbage-collected on every
+issue/consume call.
+
+The spec match is by SHA-256 of canonicalized JSON (keys sorted, top
+level only). The agent cannot reuse a token across destructive ops:
+
+- Token issued for `delete_file({item_id: "A"})`
+- Agent attempts `delete_file({item_id: "B", confirmation_token: <token>})`
+- → `spec_mismatch` error, deletion does not occur
+
+Same protection for `cancel_event` if the agent changes the cancellation
+comment between preview and execute.
 
 ### Download sandboxing
 

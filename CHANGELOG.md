@@ -33,6 +33,32 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - First read tool `m365-graph:list_drives` under `src/tools/`. Returns
   the user's primary OneDrive plus other drives (shared SharePoint
   document libraries) accessible to them.
+- Write block, round 2 — four tools completing the file + calendar
+  write surface. No new Entra scopes required (round 1 already extended
+  to Files.ReadWrite + Calendars.ReadWrite).
+  - `m365-graph:copy_file` — async copy with monitor-URL polling
+    (POST /items/{id}/copy → 202 + Location → poll until completion).
+    Exponential backoff (1s → 2s → 4s → … capped at 30s). Per
+    handbook anti-pattern S8: never returns "initiated successfully";
+    always waits for terminal state. Fallback list-by-name if the
+    Graph monitor URL's completed response omits `resourceLocation`
+    (a documented but inconsistent Graph behavior).
+  - `m365-graph:move_file` — synchronous PATCH with `parentReference`.
+    Atomic within a single drive. Cross-drive is documented as
+    unsupported (use copy + delete instead).
+  - `m365-graph:delete_file` — two-phase spec/approval per handbook
+    ADR 0002. First call returns a preview + confirmation_token tied
+    to the exact spec; second call (with the token + same args)
+    executes DELETE. Token is single-use, 5 min expiry, SHA-256
+    matched against canonical JSON of the spec — passing a stale
+    token with different args fails `spec_mismatch`.
+  - `m365-graph:cancel_event` — same two-phase pattern. Sends
+    cancellation notice to attendees after token consume.
+- New `src/auth/confirmation_tokens.ts` — module-level Map keyed by
+  token, with `issueConfirmation(tool, spec)` and
+  `consumeConfirmation(token, tool, spec)`. Per-tenant subprocess
+  scoping inherited from the spec; no cross-process leakage.
+  Garbage-collected on every issue/consume.
 - Write block, round 1 — three tools requiring Files.ReadWrite +
   Calendars.ReadWrite delegated scopes (extended in Entra app
   permissions, admin consent re-granted, OAuth re-run):
@@ -113,16 +139,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Pending
 
-- Write tools, round 2: `copy_file` / `move_file` (require async
-  polling against monitor URL until completion); `delete_file` /
-  `cancel_event` (require spec/approval confirmation-token pattern
-  per handbook ADR 0002).
 - Body-content event search via Search API (POST `/search/query`,
   separate beast).
 - Mock-based unit tests for `src/auth/**`, `src/client/**`, and
   `src/index.ts` to push coverage scope to the entire repo.
 - Integration tests against a live tenant once sandbox tokens are
   available in CI.
+- Decline-as-attendee (vs cancel-as-organizer) — separate Graph
+  endpoint not yet wrapped.
+- npm publish `@juvantlabs/m365-graph-mcp-server` once mock-based
+  tests for the auth path land.
 
 ### Tested
 
