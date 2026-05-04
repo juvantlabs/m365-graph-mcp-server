@@ -31,6 +31,15 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org/'
 
+      # npm 10 (bundled with Node 20) signs provenance via OIDC but does NOT
+      # use OIDC for the actual publish auth — it still requires a token in
+      # NODE_AUTH_TOKEN. Trusted Publishing's OIDC publish flow needs
+      # npm ≥ 11.5.1. Upgrading explicitly here so this workflow doesn't
+      # inherit npm's version from whichever Node LTS is current.
+      # See: https://docs.npmjs.com/trusted-publishers
+      - name: Upgrade npm (Trusted Publishing requires ≥ 11.5.1)
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 

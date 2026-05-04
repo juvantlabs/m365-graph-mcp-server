@@ -9,16 +9,29 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.1.2] - 2026-05-04
+## [0.1.3] - 2026-05-04
+
+### Fixed
+
+- Publish workflow now upgrades npm to latest before running
+  `npm publish`. v0.1.2's first attempt at the Trusted Publishing
+  migration failed with 404 from the npm publish PUT — root cause
+  was npm 10 (bundled with Node 20) signing provenance via OIDC but
+  not using OIDC for publish auth. Trusted Publishing requires
+  npm ≥ 11.5.1; the workflow now installs `npm@latest` after
+  setup-node so subsequent runs are independent of which npm
+  ships with the chosen Node version.
+
+## [0.1.2] - 2026-05-04 (failed publish)
 
 ### Changed
 
-- Publish workflow migrated from granular access token (`NPM_TOKEN`)
-  to npm **Trusted Publishing** (OIDC-based auth). No long-lived
-  secret in the repo; npm verifies the GitHub OIDC token's claims
-  (repo `juvantlabs/m365-graph-mcp-server`, workflow `publish.yml`,
-  environment `production`) match the trusted publisher registered on
-  npmjs.com. Provenance attestation flow unchanged.
+- Attempted migration from granular access token (`NPM_TOKEN`) to
+  npm Trusted Publishing (OIDC-based auth). The change to the
+  workflow was correct (NODE_AUTH_TOKEN removed, id-token: write
+  preserved, trusted publisher registered on npmjs.com) but the
+  bundled npm 10 didn't honor OIDC for publish auth — see 0.1.3
+  for the fix. **0.1.2 was not actually published to npm.**
 
 ## [0.1.1] - 2026-05-04
 
