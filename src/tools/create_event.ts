@@ -181,4 +181,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const createEventTool: Tool = { definition, handler };
+export const createEventTool: Tool = { category: "write_idempotent", definition, handler };

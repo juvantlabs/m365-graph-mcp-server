@@ -82,4 +82,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const listCalendarsTool: Tool = { definition, handler };
+export const listCalendarsTool: Tool = { category: "read", definition, handler };

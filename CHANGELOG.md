@@ -9,6 +9,49 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.1.4] - 2026-05-05
+
+### Added
+
+- Tool categorization per [handbook ADR 0004 (Agent action guardrails)](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0004-agent-action-guardrails.md):
+  every tool's `Tool` export now carries a typed `category` field
+  (`"read"` | `"write_idempotent"` | `"write_irreversible"`). The
+  `Tool` interface in `src/types/tool.ts` is extended; tests + handler
+  signatures are unchanged. Distribution: 9 read, 5 write_idempotent
+  (upload_file, copy_file, move_file, create_event, update_event),
+  3 write_irreversible (delete_file, cancel_event, decline_event).
+- CI step `Confirmation-token enforcement (handbook ADR 0004 Track 1)`
+  in `.github/workflows/ci.yml`: greps `src/tools/*.ts` for
+  `category: "write_irreversible"`, verifies each matching file
+  references `confirmation_token` and `consumeConfirmation`. Fails
+  the build if a `write_irreversible` tool is missing either guard.
+  This promotes the two-phase confirmation token pattern from
+  opt-in (ADR 0002, tool-author discretion) to **framework
+  invariant** (CI-enforced). Removing or relaxing the check requires
+  a successor ADR superseding 0004.
+
+### Changed
+
+- No behavior change. The 3 already-conformant tools (delete_file,
+  cancel_event, decline_event) keep their existing two-phase flow
+  unchanged; they're now formally annotated. The 5 write_idempotent
+  tools (create_event in particular — see ADR 0004 § Definition for
+  the reasoning that "reversible by another tool of this server"
+  qualifies as idempotent for framework purposes) carry their
+  annotation but are NOT gated. The 9 read tools annotated as `read`.
+
+### Background
+
+After the 2026-04-24 PocketOS / Cursor / Claude Opus 4.6 incident
+(production database + backups wiped in 9 seconds when the agent
+"guessed" on scope without verifying), the framework adopts the
+four-track guardrail design in handbook ADR 0004. This release
+ships Track 1 (mandatory confirmation tokens) for the m365-graph
+surface. Other tracks (PreToolUse Bash hooks, append-only audit
+log + off-host backup, kill switch + anomaly detection) ship at
+the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
+020.
+
 ## [0.1.3] - 2026-05-04
 
 ### Fixed

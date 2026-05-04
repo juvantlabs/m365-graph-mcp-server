@@ -217,5 +217,5 @@ const handler: ToolHandler = async (
   );
 };
 
-export const copyFileTool: Tool = { definition, handler };
+export const copyFileTool: Tool = { category: "write_idempotent", definition, handler };
 export { handler as _copyFileHandler };

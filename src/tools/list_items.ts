@@ -107,4 +107,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const listItemsTool: Tool = { definition, handler };
+export const listItemsTool: Tool = { category: "read", definition, handler };

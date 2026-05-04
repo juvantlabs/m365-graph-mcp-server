@@ -125,3 +125,30 @@ jobs:
             echo "OK — README env-var documentation matches src/."
           fi
           exit "$fail"
+
+      - name: Confirmation-token enforcement (handbook ADR 0004 Track 1)
+        run: |
+          set -euo pipefail
+          # Every tool annotated `category: "write_irreversible"` MUST:
+          #   1. Declare confirmation_token somewhere in its source
+          #      (typically inputSchema.properties).
+          #   2. Import or reference consumeConfirmation in its handler.
+          # Removing or relaxing this check requires a successor ADR
+          # superseding handbook ADR 0004.
+          fail=0
+          while IFS= read -r match; do
+            [ -z "$match" ] && continue
+            file=${match%%:*}
+            if ! grep -qE 'confirmation_token' "$file"; then
+              echo "::error file=$file::Tool annotated category=\"write_irreversible\" but source does not reference confirmation_token (handbook ADR 0004 Track 1)."
+              fail=1
+            fi
+            if ! grep -qE 'consumeConfirmation' "$file"; then
+              echo "::error file=$file::Tool annotated category=\"write_irreversible\" but source does not reference consumeConfirmation (handbook ADR 0004 Track 1)."
+              fail=1
+            fi
+          done < <(grep -rEln 'category:\s*"write_irreversible"' src/tools/ || true)
+          if [ "$fail" -eq 0 ]; then
+            echo "OK — every write_irreversible tool gates via confirmation_token + consumeConfirmation."
+          fi
+          exit "$fail"

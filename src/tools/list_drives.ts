@@ -74,4 +74,4 @@ const handler: ToolHandler = async (graph: Client): Promise<ToolResponse> => {
   };
 };
 
-export const listDrivesTool: Tool = { definition, handler };
+export const listDrivesTool: Tool = { category: "read", definition, handler };

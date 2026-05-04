@@ -160,4 +160,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const listEventsTool: Tool = { definition, handler };
+export const listEventsTool: Tool = { category: "read", definition, handler };

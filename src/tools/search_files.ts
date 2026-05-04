@@ -109,4 +109,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const searchFilesTool: Tool = { definition, handler };
+export const searchFilesTool: Tool = { category: "read", definition, handler };

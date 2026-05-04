@@ -126,4 +126,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const cancelEventTool: Tool = { definition, handler };
+export const cancelEventTool: Tool = { category: "write_irreversible", definition, handler };

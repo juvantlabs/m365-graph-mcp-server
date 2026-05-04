@@ -146,4 +146,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const deleteFileTool: Tool = { definition, handler };
+export const deleteFileTool: Tool = { category: "write_irreversible", definition, handler };

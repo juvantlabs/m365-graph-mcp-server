@@ -164,4 +164,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const downloadFileTool: Tool = { definition, handler };
+export const downloadFileTool: Tool = { category: "read", definition, handler };

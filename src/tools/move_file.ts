@@ -77,4 +77,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const moveFileTool: Tool = { definition, handler };
+export const moveFileTool: Tool = { category: "write_idempotent", definition, handler };

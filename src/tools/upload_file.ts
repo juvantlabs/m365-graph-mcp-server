@@ -211,4 +211,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const uploadFileTool: Tool = { definition, handler };
+export const uploadFileTool: Tool = { category: "write_idempotent", definition, handler };

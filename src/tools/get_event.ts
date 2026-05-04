@@ -73,4 +73,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const getEventTool: Tool = { definition, handler };
+export const getEventTool: Tool = { category: "read", definition, handler };

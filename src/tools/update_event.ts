@@ -154,4 +154,4 @@ const handler: ToolHandler = async (
 };
 
 export { buildPatchBody };
-export const updateEventTool: Tool = { definition, handler };
+export const updateEventTool: Tool = { category: "write_idempotent", definition, handler };

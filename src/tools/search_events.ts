@@ -86,4 +86,4 @@ const handler: ToolHandler = async (
   };
 };
 
-export const searchEventsTool: Tool = { definition, handler };
+export const searchEventsTool: Tool = { category: "read", definition, handler };
