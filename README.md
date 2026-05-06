@@ -55,7 +55,7 @@ Required:
 |---|---|
 | `M365_CLIENT_ID` | Microsoft Entra application (client) ID for the registered app. |
 | `M365_CLIENT_SECRET` | Client secret for the registered app. Stored only in the consumer's environment; never in `.juvant/config.json`. |
-| `M365_TENANT_ID` | Microsoft Entra tenant ID (UUID), or one of `common` / `organizations` / `consumers` for multi-tenant flows. Validated at startup against the spec regex. |
+| `M365_TENANT_ID` | Microsoft Entra tenant ID (UUID). The canonical adoption pattern is **single-tenant** — see [ARCHITECTURE.md § Tenancy model](ARCHITECTURE.md#tenancy-model). The regex also accepts `common` / `organizations` / `consumers` for technical compatibility with Microsoft authority strings, but multi-tenant operation is not the supported deployment shape. |
 
 Optional:
 

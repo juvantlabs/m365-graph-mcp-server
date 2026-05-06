@@ -86,6 +86,57 @@ exits when the client disconnects. **Per-tenant subprocess** — no
 shared module-level state across tenants (handbook spec § Per-tenant
 subprocess).
 
+## Tenancy model
+
+This server is a **self-hosted single-tenant** MCP server. Each adopter:
+
+1. Registers their own Entra (Azure AD) application **inside their own tenant**.
+2. Configures the application as **single-tenant** (`Accounts in this organizational directory only`) at registration time.
+3. Generates a client secret (or, post-MVP, a federated credential).
+4. Provides `M365_CLIENT_ID` + `M365_CLIENT_SECRET` + `M365_TENANT_ID` to the server at runtime via env vars (sourced from `.env.local` for local dev, from Azure Key Vault + Managed Identity for cloud deploys).
+
+The npm package (`@juvantlabs/m365-graph-mcp-server`) is **code only**. No
+central provider tenant exists. No customer onboarding flow. No cross-tenant
+token storage. The package consumes credentials at runtime; the adopter owns
+the auth surface end-to-end.
+
+### Comparison with Anthropic's hosted M365 connector
+
+| | Anthropic-hosted (`claude.ai Microsoft 365`) | This server (self-hosted, single-tenant) |
+|---|---|---|
+| Provider tenant | Anthropic, multi-tenant | None — the adopter IS the tenant |
+| Token storage | Anthropic-side, central | Adopter's OS keychain (local) or Key Vault (cloud) |
+| Consent flow | User-driven via claude.ai UI | Adopter's tenant admin grants to own app |
+| Audit trail | Anthropic-side (opaque to adopter) | Adopter's AAD sign-in logs + per-call audit log |
+| Failure mode of central infra | All adopters affected | Each adopter independent |
+| Operating cost | Bundled in Claude subscription | Adopter pays own Azure resources (≤€1/mo at MVP) |
+
+The two are complementary, not equivalent. The Anthropic-hosted connector is
+appropriate for casual one-off M365 access. This server is appropriate when:
+
+- The agent runs in an environment where token sovereignty matters (regulated industries, enterprise IT mandates).
+- Audit trail must live with the adopter, not the LLM provider.
+- The agent is part of a larger autonomous system (e.g. Juvant OS) where consistent self-hosted MCP boundaries are an architectural invariant ([handbook ADR 0003](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0003-mcp-server-scope-boundaries.md)).
+
+### Multi-tenant operation — technically possible, not the adoption pattern
+
+`M365_TENANT_ID` accepts the multi-tenant authority strings
+(`common` / `organizations` / `consumers`) at the regex layer because
+those are valid Microsoft authority values. Configuring the server with
+one of those values would enable multi-tenant operation against Microsoft Graph,
+**but it is not the canonical adopter pattern this server was designed for.**
+
+Operating multi-tenant inverts every row of the comparison table above:
+
+- Token storage becomes the operator's central concern (no longer the adopter's keychain).
+- Audit trail moves to whoever runs the multi-tenant deployment (not the consenting tenant).
+- An admin-consent workflow becomes necessary — and **is not implemented in this package**.
+- The blast-radius assumptions in the threat model below were drawn for single-tenant scope; they do not transfer.
+
+Adopters who genuinely need to operate this code as a multi-tenant SaaS should
+fork the package and build the consent + per-tenant token-isolation layer
+themselves. That is a different product with a different threat model.
+
 ## Threat model
 
 This server inherits the 12-item anti-pattern checklist from the
