@@ -47,7 +47,7 @@ describeIf("Transcript tools — live Graph API", () => {
     });
 
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
-    console.log(`Found ${parsed.count} events in the last 7 days`);
+    console.error(`Found ${parsed.count} events in the last 7 days`);
     expect(parsed.count).toBeGreaterThanOrEqual(0);
   });
 
@@ -65,7 +65,7 @@ describeIf("Transcript tools — live Graph API", () => {
     const events = JSON.parse((eventsResult.content[0] as { text: string }).text).events;
 
     if (events.length === 0) {
-      console.log("No events in last 7 days — skipping transcript test");
+      console.error("No events in last 7 days — skipping transcript test");
       return;
     }
 
@@ -75,7 +75,7 @@ describeIf("Transcript tools — live Graph API", () => {
 
     // Either returns transcripts, empty list, or graceful error — never throws
     expect(parsed).toHaveProperty("event_id");
-    console.log("list_meeting_transcripts result:", JSON.stringify(parsed, null, 2));
+    console.error("list_meeting_transcripts result:", JSON.stringify(parsed, null, 2));
   });
 
   it("list_meeting_transcripts + get_transcript on a Teams meeting with transcript", async () => {
@@ -93,11 +93,11 @@ describeIf("Transcript tools — live Graph API", () => {
     const onlineMeetings = events.filter((e: { is_online_meeting?: boolean }) => e.is_online_meeting);
 
     if (onlineMeetings.length === 0) {
-      console.log("No Teams meetings in last 30 days — skipping live transcript test");
+      console.error("No Teams meetings in last 30 days — skipping live transcript test");
       return;
     }
 
-    console.log(`Found ${onlineMeetings.length} Teams meetings — testing transcripts`);
+    console.error(`Found ${onlineMeetings.length} Teams meetings — testing transcripts`);
 
     // Try each meeting until we find one with a transcript
     let foundTranscript = false;
@@ -109,7 +109,7 @@ describeIf("Transcript tools — live Graph API", () => {
 
       if (listParsed.count > 0) {
         foundTranscript = true;
-        console.log(`Meeting "${meeting.subject}" has ${listParsed.count} transcript(s)`);
+        console.error(`Meeting "${meeting.subject}" has ${listParsed.count} transcript(s)`);
 
         const transcript = listParsed.transcripts[0];
         const getResult = await getTranscriptTool.handler(graph, {
@@ -123,13 +123,13 @@ describeIf("Transcript tools — live Graph API", () => {
         expect(getParsed.char_count).toBeGreaterThan(0);
         expect(getParsed).not.toContain("-->");  // no VTT markers in output
 
-        console.log(`Transcript sample (first 200 chars): ${getParsed.transcript.slice(0, 200)}`);
+        console.error(`Transcript sample (first 200 chars): ${getParsed.transcript.slice(0, 200)}`);
         break;
       }
     }
 
     if (!foundTranscript) {
-      console.log("No transcripts found in any meeting — recording may not be enabled");
+      console.error("No transcripts found in any meeting — recording may not be enabled");
     }
     // Not a hard failure — recording must be explicitly enabled per meeting
     expect(true).toBe(true);
