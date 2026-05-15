@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { listMeetingTranscriptsTool } from "../../src/tools/list_meeting_transcripts.js";
 
 const JOIN_URL = "https://teams.microsoft.com/l/meetup-join/test-meeting-123";
+const JOIN_URL_WITH_QUOTE = "https://teams.microsoft.com/l/meetup-join/it's-a-meeting";
 
 /**
  * Build a mock Graph client that routes calls by path substring.
@@ -45,7 +46,7 @@ describe("listMeetingTranscriptsTool handler", () => {
     expect(parsed.error).toBe("not_an_online_meeting");
   });
 
-  it("returns error when joinWebUrl is missing", async () => {
+  it("returns error when joinUrl is missing", async () => {
     const client = makeMultiApiClient({
       "/me/events/": { id: "evt1", subject: "Call", isOnlineMeeting: true, onlineMeeting: null },
     });
@@ -54,9 +55,30 @@ describe("listMeetingTranscriptsTool handler", () => {
     expect(parsed.error).toBe("meeting_id_unavailable");
   });
 
+  it("escapes single quotes in joinUrl before embedding in OData filter", async () => {
+    const filterCalls: string[] = [];
+    const api = vi.fn().mockImplementation((path: string) => {
+      const get = vi.fn().mockImplementation(() => {
+        if (path.includes("/me/events/")) return Promise.resolve({ id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinUrl: JOIN_URL_WITH_QUOTE } });
+        if (path.includes("/me/onlineMeetings")) return Promise.resolve({ value: [{ id: "meet-1" }] });
+        return Promise.resolve({ value: [] });
+      });
+      const chain: Record<string, unknown> = { get };
+      chain.select = vi.fn().mockReturnValue(chain);
+      chain.filter = vi.fn().mockImplementation((f: string) => { filterCalls.push(f); return chain; });
+      chain.query = vi.fn().mockReturnValue(chain);
+      return chain;
+    });
+    const client = { api } as unknown as Client;
+    await listMeetingTranscriptsTool.handler(client, { event_id: "evt1" });
+    // Single quote in the URL must be escaped as '' in the OData filter
+    expect(filterCalls[0]).toContain("it''s-a-meeting");
+    expect(filterCalls[0]).not.toContain("it's-a-meeting");
+  });
+
   it("returns error when onlineMeeting filter returns no results", async () => {
     const client = makeMultiApiClient({
-      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinWebUrl: JOIN_URL } },
+      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinUrl: JOIN_URL } },
       "/me/onlineMeetings": { value: [] },
     });
     const result = await listMeetingTranscriptsTool.handler(client, { event_id: "evt1" });
@@ -66,7 +88,7 @@ describe("listMeetingTranscriptsTool handler", () => {
 
   it("returns empty list with note when no transcripts", async () => {
     const client = makeMultiApiClient({
-      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinWebUrl: JOIN_URL } },
+      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinUrl: JOIN_URL } },
       "/me/onlineMeetings": { value: [{ id: "meet-1" }] },
       "/me/onlineMeetings/meet-1/transcripts": { value: [] },
     });
@@ -78,7 +100,7 @@ describe("listMeetingTranscriptsTool handler", () => {
 
   it("returns transcript list with metadata", async () => {
     const client = makeMultiApiClient({
-      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinWebUrl: JOIN_URL } },
+      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinUrl: JOIN_URL } },
       "/me/onlineMeetings": { value: [{ id: "meet-1" }] },
       "/me/onlineMeetings/meet-1/transcripts": {
         value: [
@@ -96,7 +118,7 @@ describe("listMeetingTranscriptsTool handler", () => {
 
   it("includes meeting_id in output for use by get_transcript", async () => {
     const client = makeMultiApiClient({
-      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinWebUrl: JOIN_URL } },
+      "/me/events/": { id: "evt1", isOnlineMeeting: true, onlineMeeting: { joinUrl: JOIN_URL } },
       "/me/onlineMeetings": { value: [{ id: "meet-42" }] },
       "/me/onlineMeetings/meet-42/transcripts": { value: [{ id: "t1", createdDateTime: null, endDateTime: null }] },
     });

@@ -90,26 +90,27 @@ const handler: ToolHandler = async (
     .get();
 
   // Graph SDK may return a ReadableStream for binary/text content types.
+  // Cap raw VTT at 500 KB before parsing to bound memory before the output cap.
+  const MAX_VTT_BYTES = 500_000;
   let vttString: string;
   if (rawResponse instanceof ReadableStream) {
     const reader = rawResponse.getReader();
-    const chunks: Uint8Array[] = [];
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
     let done = false;
-    while (!done) {
+    while (!done && totalBytes < MAX_VTT_BYTES) {
       const { done: d, value } = await reader.read();
       done = d;
-      if (value) chunks.push(value);
+      if (value) {
+        const buf = Buffer.from(value);
+        chunks.push(buf);
+        totalBytes += buf.byteLength;
+      }
     }
-    vttString = new TextDecoder().decode(
-      chunks.reduce((acc, chunk) => {
-        const merged = new Uint8Array(acc.length + chunk.length);
-        merged.set(acc);
-        merged.set(chunk, acc.length);
-        return merged;
-      }, new Uint8Array(0)),
-    );
+    if (!done) reader.cancel().catch(() => undefined);
+    vttString = Buffer.concat(chunks).toString("utf-8").slice(0, MAX_VTT_BYTES);
   } else {
-    vttString = String(rawResponse ?? "");
+    vttString = String(rawResponse ?? "").slice(0, MAX_VTT_BYTES);
   }
 
   const text = parseVtt(vttString);

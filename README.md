@@ -21,7 +21,7 @@ this server in `.juvant/config.json`.
 
 **Published.** v0.1.3 on npm
 ([`@juvantlabs/m365-graph-mcp-server`](https://www.npmjs.com/package/@juvantlabs/m365-graph-mcp-server))
-since 2026-05-04. 17 tools across files (OneDrive + SharePoint) and
+since 2026-05-04. 19 tools across files (OneDrive + SharePoint) and
 Outlook Calendar — full FEAT-014 surface. Published via npm
 **Trusted Publishing** (OIDC-based auth from GitHub Actions; no
 static `NPM_TOKEN`) with provenance attestation; manual approval gate
@@ -115,13 +115,12 @@ Step 8.5 cross-check semantics.
 | `m365-graph:cancel_event` | **Two-phase** like delete_file. Cancels a meeting the user organizes (sends cancellation notice to attendees). | `event_id` (required), `comment?`, `confirmation_token?` | preview or `{ cancelled: { event_id } }` | `Calendars.ReadWrite` |
 | `m365-graph:decline_event` | **Two-phase**. Declines an event the user is invited to (as attendee — distinct from cancel which is for events the user organizes). Sends a decline RSVP unless `send_response: false`. | `event_id` (required), `comment?`, `send_response?` (default `true`), `confirmation_token?` | preview or `{ declined: { event_id, send_response } }` | `Calendars.ReadWrite` |
 | `m365-graph:search_events_content` | Subject + **body** content search via the Microsoft Search API (POST `/search/query`). Distinct from `search_events` (subject-only via `$filter`). Returns recurrence series masters; for occurrences in a window use `list_events`. | `query` (required), `limit?` (1–50, default 25), `from?` (pagination offset, default 0) | `{ count, total, results: [<event summary>] }` | `Calendars.Read` |
+| `m365-graph:list_meeting_transcripts` | List available transcripts for a Teams meeting identified by its calendar event ID. Transcripts are post-meeting only and require recording to have been enabled by the organizer. | `event_id` (required) | `{ event_id, meeting_id, count, transcripts: [{ id, meeting_id, created_at, end_at }] }` | `Calendars.Read`, `OnlineMeetings.Read` ¹, `OnlineMeetingTranscript.Read.All` ¹ |
+| `m365-graph:get_transcript` | Fetch the text content of a Teams meeting transcript. VTT timing markers are stripped; returns clean readable text capped at 30 000 chars. | `meeting_id` + `transcript_id` (both required, from `list_meeting_transcripts`) | `{ meeting_id, transcript_id, char_count, truncated, transcript }` | `OnlineMeetingTranscript.Read.All` ¹ |
 
-That's the full FEAT-014 surface: 4 read + 4 write on files, 5 read +
-4 write on calendars — **17 tools total**. Read tools all exercise
-delegated `Files.Read` + `Calendars.Read` (granted by default in the
-narrower `*.Read` permissions); write tools require `Files.ReadWrite`
-+ `Calendars.ReadWrite` (separately granted in the Entra app +
-admin-consented).
+¹ **Admin consent required.** `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All` must be granted in the Entra app registration under **API permissions → Add a permission → Microsoft Graph → Delegated → Grant admin consent**. Without admin consent these tools return 403 Forbidden.
+
+That's 4 read + 4 write on files, 5 read + 4 write on calendars, 2 read on meeting transcripts — **19 tools total**. Read tools exercise delegated `Files.Read` + `Calendars.Read`; write tools require `Files.ReadWrite` + `Calendars.ReadWrite`; transcript tools require `OnlineMeetings.Read` + `OnlineMeetingTranscript.Read.All` (all separately granted + admin-consented in the Entra app).
 
 ## Local development
 

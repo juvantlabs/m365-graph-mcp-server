@@ -36,6 +36,13 @@ the auth path consolidated.
 - Create / update / cancel events.
 - Search events by subject / body.
 
+**Meeting transcripts** (v0.2.0+)
+
+- List available transcripts for a Teams meeting (from a calendar event ID).
+- Fetch transcript content (VTT parsed to clean text, capped at 30 000 chars).
+- Post-meeting only: live transcription during active calls requires a media bot
+  (separate threat model; explicitly out of scope — see below).
+
 ### Out of scope
 
 The exclusions below follow the principles formalized in
@@ -76,7 +83,7 @@ registered app).
 |---|---|
 | OAuth library | `@azure/msal-node` (Microsoft's official) — never roll auth |
 | Flow | Authorization Code with PKCE for delegated; Client Credentials for daemon ops |
-| Scopes | Per-tool minimum: `Files.Read.All` for read-only file tools, `Files.ReadWrite.All` for write tools, `Calendars.Read` / `Calendars.ReadWrite` for calendar tools. Documented in [`README.md`](README.md) § Tools as tools ship. |
+| Scopes | Per-tool minimum: `Files.Read.All` for read-only file tools, `Files.ReadWrite.All` for write tools, `Calendars.Read` / `Calendars.ReadWrite` for calendar tools, `OnlineMeetings.Read` + `OnlineMeetingTranscript.Read.All` (both **admin consent required**) for transcript tools. Documented in [`README.md`](README.md) § Tools. |
 | Token storage | `@napi-rs/keyring` (OS keychain). `keytar` is archived (handbook spec anti-pattern #10) — explicitly NOT used. |
 | Token lifetime | Refresh token rotation handled by MSAL; refreshes never enter the agent's context. |
 | Tenant ID | Validated at startup against the regex `^(common\|organizations\|consumers\|<UUID>)$` (handbook spec § Auth). Prevents arbitrary string interpolation into the authority URL. |
