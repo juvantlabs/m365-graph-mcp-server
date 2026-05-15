@@ -56,10 +56,12 @@ const handler: ToolHandler = async (
 ): Promise<ToolResponse> => {
   const eventId = validateRequiredString(args.event_id, "event_id");
 
-  // Step 1: resolve onlineMeetingId from the calendar event.
+  // Step 1: resolve joinWebUrl from the calendar event.
+  // Note: onlineMeetingId is not selectable via $select in all tenants;
+  // we use onlineMeeting.joinWebUrl instead and resolve the meeting via filter.
   const event = await graph
     .api(`/me/events/${encodeURIComponent(eventId)}`)
-    .select("id,isOnlineMeeting,onlineMeetingId,subject")
+    .select("id,isOnlineMeeting,onlineMeeting,subject")
     .get();
 
   if (!event.isOnlineMeeting) {
@@ -76,20 +78,48 @@ const handler: ToolHandler = async (
     };
   }
 
-  const meetingId = event.onlineMeetingId as string | undefined;
-  if (!meetingId) {
+  const onlineMeeting = event.onlineMeeting as Record<string, unknown> | undefined;
+  const joinWebUrl = onlineMeeting?.joinWebUrl as string | undefined;
+  if (!joinWebUrl) {
     return {
       content: [
         {
           type: "text",
           text: JSON.stringify({
             error: "meeting_id_unavailable",
-            message: "Could not resolve onlineMeetingId from the event. The meeting may have been created before transcript support was enabled in this tenant.",
+            message: "Could not resolve Teams meeting join URL from the event.",
           }),
         },
       ],
     };
   }
+
+  // Step 2: resolve onlineMeeting ID from joinWebUrl.
+  const meetingResponse = await graph
+    .api("/me/onlineMeetings")
+    .filter(`JoinWebUrl eq '${joinWebUrl}'`)
+    .select("id")
+    .get();
+
+  const meetings: Record<string, unknown>[] = Array.isArray(meetingResponse?.value)
+    ? meetingResponse.value
+    : [];
+
+  if (meetings.length === 0) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "meeting_id_unavailable",
+            message: "Could not resolve onlineMeeting from the event's join URL. The meeting may have expired or transcript access may require admin consent.",
+          }),
+        },
+      ],
+    };
+  }
+
+  const meetingId = String(meetings[0].id ?? "");
 
   // Step 2: list transcripts for the meeting.
   const response = await graph

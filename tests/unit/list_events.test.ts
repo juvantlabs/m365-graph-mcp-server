@@ -62,9 +62,10 @@ function captureRequest(returnValue: unknown): {
   const get = vi.fn().mockResolvedValue(returnValue);
   const orderby = vi.fn().mockReturnValue({ get });
   const top = vi.fn().mockReturnValue({ orderby });
+  const select = vi.fn().mockReturnValue({ top, orderby });
   const query = vi.fn().mockImplementation((q: Record<string, unknown>) => {
     queries.push(q);
-    return { top };
+    return { top, select };
   });
   const api = vi.fn().mockImplementation((path: string) => {
     apiCalls.push(path);

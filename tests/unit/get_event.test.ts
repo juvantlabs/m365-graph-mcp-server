@@ -42,13 +42,17 @@ describe("expandEvent", () => {
     expect(expandEvent({ id: "x", subject: "x" }).is_online_meeting).toBe(false);
   });
 
-  it("exposes online_meeting_id when present", () => {
-    const r = expandEvent({ id: "x", subject: "x", onlineMeetingId: "meet-123" });
-    expect(r.online_meeting_id).toBe("meet-123");
+  it("exposes online_meeting_join_url from onlineMeeting.joinWebUrl", () => {
+    const r = expandEvent({
+      id: "x",
+      subject: "x",
+      onlineMeeting: { joinWebUrl: "https://teams.microsoft.com/l/meetup-join/123" },
+    });
+    expect(r.online_meeting_join_url).toBe("https://teams.microsoft.com/l/meetup-join/123");
   });
 
-  it("returns null online_meeting_id when absent", () => {
-    expect(expandEvent({ id: "x", subject: "x" }).online_meeting_id).toBeNull();
+  it("returns null online_meeting_join_url when absent", () => {
+    expect(expandEvent({ id: "x", subject: "x" }).online_meeting_join_url).toBeNull();
   });
 });
 
@@ -82,16 +86,16 @@ describe("getEventTool handler", () => {
     expect(calls[0]).toBe("/me/events/evt%2Fwith%2Fslash");
   });
 
-  it("returns is_online_meeting and online_meeting_id in response", async () => {
+  it("returns is_online_meeting and online_meeting_join_url in response", async () => {
     const client = makeChainClient({
       id: "evt1",
       subject: "Acme Call",
       isOnlineMeeting: true,
-      onlineMeetingId: "meet-abc",
+      onlineMeeting: { joinWebUrl: "https://teams.microsoft.com/l/meetup-join/abc" },
     });
     const result = await getEventTool.handler(client, { event_id: "evt1" });
     const parsed = JSON.parse((result.content[0] as { text: string }).text);
     expect(parsed.is_online_meeting).toBe(true);
-    expect(parsed.online_meeting_id).toBe("meet-abc");
+    expect(parsed.online_meeting_join_url).toBe("https://teams.microsoft.com/l/meetup-join/abc");
   });
 });

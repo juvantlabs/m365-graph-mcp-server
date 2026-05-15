@@ -75,6 +75,7 @@ interface EventSummary {
   start: { datetime: string; timezone: string };
   end: { datetime: string; timezone: string };
   is_all_day: boolean;
+  is_online_meeting: boolean;
   location: string | null;
   organizer_name: string | null;
   organizer_email: string | null;
@@ -113,6 +114,7 @@ export function summarizeEvent(event: Record<string, unknown>): EventSummary {
       timezone: String(end?.timeZone ?? ""),
     },
     is_all_day: Boolean(event.isAllDay),
+    is_online_meeting: Boolean(event.isOnlineMeeting),
     location: (location?.displayName as string | undefined) || null,
     organizer_name: (orgEmail?.name as string | undefined) ?? null,
     organizer_email: (orgEmail?.address as string | undefined) ?? null,
@@ -141,6 +143,7 @@ const handler: ToolHandler = async (
   const response = await graph
     .api(apiBase)
     .query({ startDateTime: start, endDateTime: end })
+    .select("id,subject,bodyPreview,start,end,isAllDay,isOnlineMeeting,location,organizer,attendees,webLink")
     .top(limit)
     .orderby("start/dateTime")
     .get();
