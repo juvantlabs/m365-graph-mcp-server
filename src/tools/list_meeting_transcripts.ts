@@ -1,0 +1,134 @@
+/**
+ * Tool: m365-graph:list_meeting_transcripts
+ *
+ * List available transcripts for a Teams meeting, identified by its
+ * calendar event ID. Transcripts are available post-meeting and only
+ * when recording was enabled by the meeting organizer.
+ *
+ * Required Graph scopes:
+ *   Calendars.Read (to resolve the event → onlineMeetingId)
+ *   OnlineMeetingTranscript.Read.All (delegated, admin consent required)
+ *
+ * Input:
+ *   event_id  (string, required) — calendar event id from list_events /
+ *             search_events / get_event
+ *
+ * Output: list of transcript metadata with id, created_at, end_at.
+ *   Pass transcript id + meeting_id to get_transcript to read the content.
+ *
+ * Returns an empty list (not an error) when the meeting ended without
+ * a transcript (recording disabled or not yet processed).
+ */
+
+import type { Client } from "@microsoft/microsoft-graph-client";
+
+import { validateRequiredString } from "../types/validators.js";
+import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/tool.js";
+
+const definition: ToolDefinition = {
+  name: "m365-graph:list_meeting_transcripts",
+  description:
+    "List available transcripts for a Teams meeting identified by its calendar event ID. " +
+    "Transcripts are post-meeting only and require recording to have been enabled. " +
+    "Returns transcript IDs to pass to get_transcript. Read-only.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      event_id: {
+        type: "string",
+        description: "Calendar event ID from list_events, search_events, or get_event.",
+      },
+    },
+    required: ["event_id"],
+  },
+};
+
+interface TranscriptSummary {
+  id: string;
+  meeting_id: string;
+  created_at: string | null;
+  end_at: string | null;
+}
+
+const handler: ToolHandler = async (
+  graph: Client,
+  args: Record<string, unknown>,
+): Promise<ToolResponse> => {
+  const eventId = validateRequiredString(args.event_id, "event_id");
+
+  // Step 1: resolve onlineMeetingId from the calendar event.
+  const event = await graph
+    .api(`/me/events/${encodeURIComponent(eventId)}`)
+    .select("id,isOnlineMeeting,onlineMeetingId,subject")
+    .get();
+
+  if (!event.isOnlineMeeting) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "not_an_online_meeting",
+            message: `Event '${String(event.subject ?? eventId)}' is not a Teams online meeting. Transcripts are only available for online meetings.`,
+          }),
+        },
+      ],
+    };
+  }
+
+  const meetingId = event.onlineMeetingId as string | undefined;
+  if (!meetingId) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "meeting_id_unavailable",
+            message: "Could not resolve onlineMeetingId from the event. The meeting may have been created before transcript support was enabled in this tenant.",
+          }),
+        },
+      ],
+    };
+  }
+
+  // Step 2: list transcripts for the meeting.
+  const response = await graph
+    .api(`/me/onlineMeetings/${encodeURIComponent(meetingId)}/transcripts`)
+    .select("id,meetingId,createdDateTime,endDateTime")
+    .get();
+
+  const items: Record<string, unknown>[] = Array.isArray(response?.value)
+    ? response.value
+    : [];
+
+  const transcripts: TranscriptSummary[] = items.map((t) => ({
+    id: String(t.id ?? ""),
+    meeting_id: meetingId,
+    created_at: (t.createdDateTime as string | undefined) ?? null,
+    end_at: (t.endDateTime as string | undefined) ?? null,
+  }));
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(
+          {
+            event_id: eventId,
+            meeting_id: meetingId,
+            count: transcripts.length,
+            transcripts,
+            note:
+              transcripts.length === 0
+                ? "No transcripts found. Recording may not have been enabled, or the transcript is still processing."
+                : undefined,
+          },
+          null,
+          2,
+        ),
+      },
+    ],
+  };
+};
+
+export const listMeetingTranscriptsTool: Tool = { category: "read", definition, handler };

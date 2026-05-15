@@ -35,6 +35,7 @@ export const DELEGATED_SCOPES = [
   "User.Read",
   "Files.ReadWrite",
   "Calendars.ReadWrite",
+  "OnlineMeetingTranscript.Read.All",
   "offline_access",
 ];
 

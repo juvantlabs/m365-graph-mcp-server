@@ -25,6 +25,9 @@ import { listCalendarsTool } from "./list_calendars.js";
 import { listEventsTool } from "./list_events.js";
 import { searchEventsTool } from "./search_events.js";
 import { searchEventsContentTool } from "./search_events_content.js";
+// Meetings — transcripts (read)
+import { listMeetingTranscriptsTool } from "./list_meeting_transcripts.js";
+import { getTranscriptTool } from "./get_transcript.js";
 // Calendars — write
 import { cancelEventTool } from "./cancel_event.js";
 import { createEventTool } from "./create_event.js";
@@ -48,6 +51,9 @@ export const ALL_TOOLS: ReadonlyArray<Tool> = [
   searchEventsTool,
   searchEventsContentTool,
   getEventTool,
+  // Meetings — transcripts (read)
+  listMeetingTranscriptsTool,
+  getTranscriptTool,
   // Calendars — write
   createEventTool,
   updateEventTool,

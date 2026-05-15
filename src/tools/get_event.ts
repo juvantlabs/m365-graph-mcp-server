@@ -43,6 +43,8 @@ interface FullEvent extends ReturnType<typeof summarizeEvent> {
   body: string;
   body_truncated: boolean;
   recurrence: unknown;
+  is_online_meeting: boolean;
+  online_meeting_id: string | null;
 }
 
 export function expandEvent(event: Record<string, unknown>): FullEvent {
@@ -56,6 +58,8 @@ export function expandEvent(event: Record<string, unknown>): FullEvent {
     body: truncated ? bodyContent.slice(0, BODY_CHAR_CAP) : bodyContent,
     body_truncated: truncated,
     recurrence: event.recurrence ?? null,
+    is_online_meeting: Boolean(event.isOnlineMeeting),
+    online_meeting_id: (event.onlineMeetingId as string | undefined) ?? null,
   };
 }
 
@@ -65,7 +69,10 @@ const handler: ToolHandler = async (
 ): Promise<ToolResponse> => {
   const eventId = validateRequiredString(args.event_id, "event_id");
 
-  const event = await graph.api(`/me/events/${encodeURIComponent(eventId)}`).get();
+  const event = await graph
+    .api(`/me/events/${encodeURIComponent(eventId)}`)
+    .select("id,subject,body,start,end,location,organizer,attendees,isAllDay,webLink,recurrence,isOnlineMeeting,onlineMeetingId,bodyPreview")
+    .get();
   const result = expandEvent(event);
 
   return {
