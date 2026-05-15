@@ -84,12 +84,35 @@ const handler: ToolHandler = async (
     `/me/onlineMeetings/${encodeURIComponent(meetingId)}` +
     `/transcripts/${encodeURIComponent(transcriptId)}/content`;
 
-  const rawVtt: string = await graph
+  const rawResponse: unknown = await graph
     .api(endpoint)
     .query({ $format: "text/vtt" })
     .get();
 
-  const text = parseVtt(String(rawVtt ?? ""));
+  // Graph SDK may return a ReadableStream for binary/text content types.
+  let vttString: string;
+  if (rawResponse instanceof ReadableStream) {
+    const reader = rawResponse.getReader();
+    const chunks: Uint8Array[] = [];
+    let done = false;
+    while (!done) {
+      const { done: d, value } = await reader.read();
+      done = d;
+      if (value) chunks.push(value);
+    }
+    vttString = new TextDecoder().decode(
+      chunks.reduce((acc, chunk) => {
+        const merged = new Uint8Array(acc.length + chunk.length);
+        merged.set(acc);
+        merged.set(chunk, acc.length);
+        return merged;
+      }, new Uint8Array(0)),
+    );
+  } else {
+    vttString = String(rawResponse ?? "");
+  }
+
+  const text = parseVtt(vttString);
   const truncated = text.length > CONTENT_CHAR_CAP;
   const content = truncated ? text.slice(0, CONTENT_CHAR_CAP) : text;
 

@@ -79,7 +79,8 @@ const handler: ToolHandler = async (
   }
 
   const onlineMeeting = event.onlineMeeting as Record<string, unknown> | undefined;
-  const joinWebUrl = onlineMeeting?.joinWebUrl as string | undefined;
+  // Graph returns joinUrl (not joinWebUrl) on the event's onlineMeeting info object.
+  const joinWebUrl = (onlineMeeting?.joinUrl ?? onlineMeeting?.joinWebUrl) as string | undefined;
   if (!joinWebUrl) {
     return {
       content: [
@@ -95,10 +96,10 @@ const handler: ToolHandler = async (
   }
 
   // Step 2: resolve onlineMeeting ID from joinWebUrl.
+  // Note: $select is not supported on /me/onlineMeetings with $filter.
   const meetingResponse = await graph
     .api("/me/onlineMeetings")
     .filter(`JoinWebUrl eq '${joinWebUrl}'`)
-    .select("id")
     .get();
 
   const meetings: Record<string, unknown>[] = Array.isArray(meetingResponse?.value)
