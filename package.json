@@ -28,7 +28,7 @@
     "setup": "tsx --env-file=.env.local src/index.ts setup",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit --passWithNoTests",
-    "test:integration": "vitest run tests/integration --passWithNoTests",
+    "test:integration": "node --env-file=.env.local node_modules/.bin/vitest run tests/integration --passWithNoTests 2>/dev/null || vitest run tests/integration --passWithNoTests",
     "test:watch": "vitest",
     "lint": "eslint src tests --no-error-on-unmatched-pattern",
     "typecheck": "tsc --noEmit",

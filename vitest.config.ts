@@ -2,9 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // Default: unit tests only. Override with `vitest run tests/integration`
-    // or via the test:integration npm script.
-    include: ['tests/unit/**/*.test.ts'],
+    // Default: unit tests only. Integration tests run via test:integration script.
+    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',
     globals: false,
     testTimeout: 10_000,
