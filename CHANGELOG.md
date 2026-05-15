@@ -9,6 +9,40 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.0] - 2026-05-15
+
+### Added
+
+- **`m365-graph:list_meeting_transcripts`** — list available transcripts for a
+  Teams meeting identified by a calendar event ID. Resolves the event's
+  `onlineMeeting.joinUrl` → filters `/me/onlineMeetings` by JoinWebUrl →
+  lists transcripts via `/me/onlineMeetings/{id}/transcripts`. Returns an
+  empty list (not an error) when no transcript is available yet. Requires
+  `OnlineMeetings.Read` + `OnlineMeetingTranscript.Read.All` (both delegated,
+  admin consent required — see README § Tools).
+- **`m365-graph:get_transcript`** — fetch the text content of a Teams meeting
+  transcript. The Graph API returns VTT (WebVTT subtitle format); this tool
+  strips timing markers, sequence numbers, and NOTE blocks, returning clean
+  readable text capped at 30 000 chars. Handles both ReadableStream and string
+  responses from the Graph SDK. Requires `OnlineMeetingTranscript.Read.All`.
+- **`m365-graph:list_events`** — new field `is_online_meeting` (boolean) in
+  every event summary. Lets callers identify Teams meetings without a separate
+  `get_event` call.
+- **`m365-graph:get_event`** — new field `online_meeting_join_url` (string or
+  null) sourced from `onlineMeeting.joinUrl`.
+
+### Changed
+
+- `DELEGATED_SCOPES` now includes `OnlineMeetings.Read` and
+  `OnlineMeetingTranscript.Read.All`. **Re-run `npm run setup`** (or
+  `npx @juvantlabs/m365-graph-mcp-server setup`) after upgrading to acquire
+  the new scopes. Both require admin consent in the Entra app registration.
+
+### Fixed
+
+- OData injection: `joinUrl` is now single-quote-escaped before embedding in
+  the `JoinWebUrl eq '...'` OData filter string.
+
 ## [0.1.4] - 2026-05-05
 
 ### Added
