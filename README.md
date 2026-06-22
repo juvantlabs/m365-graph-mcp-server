@@ -76,6 +76,8 @@ Optional:
 |---|---|
 | `MCP_SERVER_LOG_LEVEL` | Log level for diagnostics on stderr (default `info`). |
 | `M365_DOWNLOAD_DIR` | Override the per-tenant sandbox directory used by `download_file`. Default: `$XDG_CACHE_HOME/m365-graph-mcp-server/<tenant-id>` or `~/.cache/m365-graph-mcp-server/<tenant-id>`. |
+| `M365_TRANSCRIPT_MAX_BYTES` | Max raw VTT bytes read from Graph per `get_transcript` call. Defense-in-depth bound against the audit-S7 whole-file-buffering pattern. Default `10000000` (10 MB ≈ 8 h+ of speech). |
+| `M365_TRANSCRIPT_MAX_CHARS` | Max parsed-text characters returned in a single `get_transcript` response. Long transcripts page via the tool's `offset` + `next_offset` fields. Default `200000` (~2 h of speech). |
 
 > CI enforces that every variable documented in this section is actually
 > read from `process.env.<NAME>` somewhere in `src/` — placeholder names
@@ -129,7 +131,7 @@ Step 8.5 cross-check semantics.
 | `m365-graph:decline_event` | **Two-phase**. Declines an event the user is invited to (as attendee — distinct from cancel which is for events the user organizes). Sends a decline RSVP unless `send_response: false`. | `event_id` (required), `comment?`, `send_response?` (default `true`), `confirmation_token?` | preview or `{ declined: { event_id, send_response } }` | `Calendars.ReadWrite` |
 | `m365-graph:search_events_content` | Subject + **body** content search via the Microsoft Search API (POST `/search/query`). Distinct from `search_events` (subject-only via `$filter`). Returns recurrence series masters; for occurrences in a window use `list_events`. | `query` (required), `limit?` (1–50, default 25), `from?` (pagination offset, default 0) | `{ count, total, results: [<event summary>] }` | `Calendars.Read` |
 | `m365-graph:list_meeting_transcripts` | List available transcripts for a Teams meeting identified by its calendar event ID. Transcripts are post-meeting only and require recording to have been enabled by the organizer. | `event_id` (required) | `{ event_id, meeting_id, count, transcripts: [{ id, meeting_id, created_at, end_at }] }` | `Calendars.Read`, `OnlineMeetings.Read` ¹, `OnlineMeetingTranscript.Read.All` ¹ |
-| `m365-graph:get_transcript` | Fetch the text content of a Teams meeting transcript. VTT timing markers are stripped; returns clean readable text capped at 30 000 chars. | `meeting_id` + `transcript_id` (both required, from `list_meeting_transcripts`) | `{ meeting_id, transcript_id, char_count, truncated, transcript }` | `OnlineMeetingTranscript.Read.All` ¹ |
+| `m365-graph:get_transcript` | Fetch the text content of a Teams meeting transcript. VTT timing markers are stripped; returns clean readable text. Long transcripts page via `offset` + `next_offset`; per-call cap and upstream byte cap configurable via `M365_TRANSCRIPT_MAX_CHARS` / `M365_TRANSCRIPT_MAX_BYTES` (defaults 200 000 chars / 10 MB). | `meeting_id` + `transcript_id` (required, from `list_meeting_transcripts`); `offset?` (0..2_000_000_000), `max_chars?` | `{ meeting_id, transcript_id, offset, char_count, next_offset, total_char_count, truncated, vtt_truncated, transcript }` | `OnlineMeetingTranscript.Read.All` ¹ |
 
 ¹ **Admin consent required.** `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All` must be granted in the Entra app registration under **API permissions → Add a permission → Microsoft Graph → Delegated → Grant admin consent**. Without admin consent these tools return 403 Forbidden.
 
