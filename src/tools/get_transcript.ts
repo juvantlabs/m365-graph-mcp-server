@@ -46,20 +46,23 @@ import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/t
 const DEFAULT_MAX_VTT_BYTES = 10_000_000; // 10 MB raw VTT (~8h+ of speech)
 const DEFAULT_CONTENT_CHAR_CAP = 200_000; // 200k chars parsed (~2h of speech)
 
-function readPositiveIntEnv(name: string, fallback: number): number {
-  const raw = process.env[name];
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
   if (!Number.isInteger(n) || n <= 0) return fallback;
   return n;
 }
 
+// Env reads are intentionally written as literal `process.env.<NAME>` (not
+// via a dynamic-key helper) so the README env-var-accuracy CI gate
+// (handbook anti-pattern S2) can grep them and confirm the documented names
+// are actually wired. See .github/workflows/ci.yml § "README env-var accuracy".
 function getMaxVttBytes(): number {
-  return readPositiveIntEnv("M365_TRANSCRIPT_MAX_BYTES", DEFAULT_MAX_VTT_BYTES);
+  return parsePositiveInt(process.env.M365_TRANSCRIPT_MAX_BYTES, DEFAULT_MAX_VTT_BYTES);
 }
 
 function getMaxChars(): number {
-  return readPositiveIntEnv("M365_TRANSCRIPT_MAX_CHARS", DEFAULT_CONTENT_CHAR_CAP);
+  return parsePositiveInt(process.env.M365_TRANSCRIPT_MAX_CHARS, DEFAULT_CONTENT_CHAR_CAP);
 }
 
 const definition: ToolDefinition = {
