@@ -15,6 +15,7 @@
  */
 
 import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -31,6 +32,35 @@ import { ALL_TOOLS, buildHandlerMap } from "./tools/index.js";
 
 export const TENANT_ID_RE =
   /^(common|organizations|consumers|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+
+/**
+ * Read the package version from `package.json` at runtime, so the MCP
+ * server advertises the real shipped version instead of a hardcoded
+ * literal that silently drifts away from `package.json` on each bump.
+ *
+ * Resolution strategy: use `createRequire(import.meta.url)` against
+ * `../package.json`. This relies on `package.json` sitting one level
+ * above the runtime file, which holds in BOTH layouts the build emits:
+ *
+ *   - Built:  dist/index.js   →  ../package.json  =  <pkg-root>/package.json
+ *   - Dev:    src/index.ts    →  ../package.json  =  <pkg-root>/package.json
+ *   - Tests:  src/index.ts    →  ../package.json  =  <pkg-root>/package.json
+ *
+ * `createRequire` is preferred over a bare JSON import-assertion here
+ * because `tsconfig.json` has `rootDir: "src"`, which forbids importing
+ * `../package.json` from `src/index.ts`. Going through `createRequire`
+ * sidesteps the rootDir constraint without copying or generating files
+ * at build time, and stays dependency-free.
+ *
+ * Exported for unit testing.
+ */
+export function readPackageVersion(): string {
+  const require = createRequire(import.meta.url);
+  const pkg = require("../package.json") as { version: string };
+  return pkg.version;
+}
+
+export const PACKAGE_VERSION = readPackageVersion();
 
 /**
  * Validate the env vars the server needs at startup. Throws with a
@@ -99,7 +129,7 @@ async function runMcpServer(): Promise<void> {
   const server = new Server(
     {
       name: "@juvantlabs/m365-graph-mcp-server",
-      version: "0.1.4",
+      version: PACKAGE_VERSION,
     },
     {
       capabilities: { tools: {} },
@@ -117,7 +147,7 @@ async function runMcpServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(
-    `[m365-graph-mcp-server] running on stdio (log level: ${logLevel}, tenant: ${process.env.M365_TENANT_ID}, tools: ${ALL_TOOLS.length})`,
+    `[m365-graph-mcp-server] v${PACKAGE_VERSION} running on stdio (log level: ${logLevel}, tenant: ${process.env.M365_TENANT_ID}, tools: ${ALL_TOOLS.length})`,
   );
 }
 

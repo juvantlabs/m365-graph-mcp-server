@@ -1,7 +1,19 @@
+import { createRequire } from "node:module";
+
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { describe, expect, it, vi } from "vitest";
 
-import { TENANT_ID_RE, dispatch, dispatchToolCall, checkEnv } from "../../src/index.js";
+import {
+  PACKAGE_VERSION,
+  TENANT_ID_RE,
+  checkEnv,
+  dispatch,
+  dispatchToolCall,
+  readPackageVersion,
+} from "../../src/index.js";
+
+const require = createRequire(import.meta.url);
+const pkgJson = require("../../package.json") as { version: string };
 
 describe("checkEnv", () => {
   const valid = {
@@ -139,5 +151,17 @@ describe("dispatch", () => {
     const setup = vi.fn().mockRejectedValue(new Error("boom"));
     const serve = vi.fn();
     await expect(dispatch(["node", "x", "setup"], { setup, serve })).rejects.toThrow("boom");
+  });
+});
+
+describe("package version", () => {
+  it("PACKAGE_VERSION strictly equals package.json version (no drift)", () => {
+    expect(pkgJson.version).toMatch(/^\d+\.\d+\.\d+(?:-[\w.+-]+)?$/);
+    expect(PACKAGE_VERSION).toBe(pkgJson.version);
+  });
+
+  it("readPackageVersion() resolves the same value as the cached constant", () => {
+    expect(readPackageVersion()).toBe(pkgJson.version);
+    expect(readPackageVersion()).toBe(PACKAGE_VERSION);
   });
 });
