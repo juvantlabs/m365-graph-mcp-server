@@ -22,6 +22,13 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are now 200 000 chars / 10 MB — generous enough for multi-hour meetings —
   and the byte cap loss is now flagged on the response (`vtt_truncated`).
   Issue [#2](https://github.com/juvantlabs/m365-graph-mcp-server/issues/2).
+- **Server version reporting** — the MCP `Server` constructor previously
+  advertised a hardcoded `version: "0.1.4"` to every MCP client while
+  `package.json` had moved on. The version is now read from `package.json`
+  at runtime via `createRequire(import.meta.url)`, so it always matches the
+  shipped package (and is also surfaced in the stdio startup log line). A
+  unit test asserts `PACKAGE_VERSION === package.json#version` to prevent
+  silent drift from recurring.
 
 ### Added
 
