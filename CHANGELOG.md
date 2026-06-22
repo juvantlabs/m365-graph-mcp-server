@@ -43,6 +43,32 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `npm audit fix` to clear moderate+ advisories that were blocking CI. No
   direct-dependency major bumps; transitive lockfile updates only.
 
+### Documentation
+
+- Accuracy pass across `ARCHITECTURE.md`, `README.md`, and `## Status` ahead
+  of the v0.3.0 tag. `ARCHITECTURE.md § Tool catalog` gains rows for
+  `list_meeting_transcripts` and `get_transcript` (Graph call chain, inputs,
+  outputs, scopes, VTT-stripping + paging + cap notes). README Tools-table
+  rows for `list_calendars`, `list_events`, and `get_event` reconciled with
+  the actual handler shapes (owner_name/owner_email split, body_preview /
+  is_all_day / is_online_meeting / organizer_name / organizer_email / webLink,
+  online_meeting_join_url). `## What's new` is now evergreen (no version
+  suffix); the `get_transcript` bullet drops the stale "30 000 chars" cap
+  reference — cap and paging detail live in the Tools table and the
+  `## Environment variables` table only. `## Status` reads v0.3.0; the
+  `mcp_server` pin in the binding example is bumped to `0.3.0`. No code
+  changes.
+
+---
+
+## [0.2.1] - 2026-06-15
+
+### Documentation
+
+- README `## What's new in v0.2.0` section added retroactively for the v0.2.0
+  ship (transcript tools + new delegated scopes + `npm run setup` reminder).
+  No behavior change; package metadata-only release.
+
 ---
 
 ## [0.2.0] - 2026-05-15
@@ -337,3 +363,10 @@ the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
 
 [Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/juvantlabs/m365-graph-mcp-server/releases/tag/v0.1.0

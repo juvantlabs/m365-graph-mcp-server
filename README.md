@@ -17,12 +17,12 @@ real Juvant OS need surfaces; outbound Teams notifications go through
 webhooks (Adaptive Cards), not MCP. Per-company instance config binds
 this server in `.juvant/config.json`.
 
-## What's new in v0.2.0
+## What's new
 
 **Teams meeting transcript support.** Two new read-only tools:
 
 - **`m365-graph:list_meeting_transcripts`** — given a calendar event ID, lists available post-meeting transcripts. Returns transcript IDs to pass to `get_transcript`.
-- **`m365-graph:get_transcript`** — fetches the transcript content, strips VTT timing markers, and returns clean readable text (capped at 30 000 chars).
+- **`m365-graph:get_transcript`** — fetches the transcript content, strips VTT timing markers, and returns clean readable text.
 
 Two new delegated scopes required (admin consent — see § Tools):
 `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All`.
@@ -32,7 +32,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full change list.
 
 ## Status
 
-**Published.** v0.2.0 on npm
+**Published.** v0.3.0 on npm
 ([`@juvantlabs/m365-graph-mcp-server`](https://www.npmjs.com/package/@juvantlabs/m365-graph-mcp-server)).
 19 tools across files (OneDrive + SharePoint), Outlook Calendar, and
 Teams meeting transcripts. Published via npm **Trusted Publishing**
@@ -96,7 +96,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 {
   "m365-graph": {
     "provider": "microsoft",
-    "mcp_server": "npx @juvantlabs/m365-graph-mcp-server@0.1.3",
+    "mcp_server": "npx @juvantlabs/m365-graph-mcp-server@0.3.0",
     "scope": "rw"
   }
 }
@@ -117,10 +117,10 @@ Step 8.5 cross-check semantics.
 | `m365-graph:list_items` | Lists immediate children (files + folders) of a folder. Defaults to the drive root. | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` with id / name / type / size / child_count / lastModified / webUrl. | `Files.Read` |
 | `m365-graph:search_files` | Searches files by name and content within a drive. | `query` (required), `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with id / name / path / size / is_folder / lastModified / webUrl. | `Files.Read` |
 | `m365-graph:download_file` | Downloads a file to a per-tenant local sandbox. Returns the local path; agent reads via a filesystem-aware tool. Streams, capped at 200 MB. | `item_id` (required), `drive_id?` | `{ local_path, size_bytes, name, content_type }` | `Files.Read` |
-| `m365-graph:list_calendars` | Lists the user's calendars (primary + group / shared). | `limit?` (1–100, default 50) | `{ count, calendars: [] }` with id / name / color / owner / is_default / can_edit / can_share. | `Calendars.Read` |
-| `m365-graph:list_events` | Lists events in a date window. Recurrences are expanded — each occurrence is its own event. | `start` + `end` (ISO 8601, required), `calendar_id?`, `limit?` (1–200, default 100) | `{ window, count, events: [] }` with id / subject / start / end / location / organizer / attendees / web_url. | `Calendars.Read` |
+| `m365-graph:list_calendars` | Lists the user's calendars (primary + group / shared). | `limit?` (1–100, default 50) | `{ count, calendars: [] }` with id / name / color / owner_name / owner_email / is_default / can_edit / can_share. | `Calendars.Read` |
+| `m365-graph:list_events` | Lists events in a date window. Recurrences are expanded — each occurrence is its own event. | `start` + `end` (ISO 8601, required), `calendar_id?`, `limit?` (1–200, default 100) | `{ calendar_id, window, count, events: [] }` with id / subject / body_preview / start / end / is_all_day / is_online_meeting / location / organizer_name / organizer_email / attendees / webLink. | `Calendars.Read` |
 | `m365-graph:search_events` | Searches events by subject substring (Graph $search isn't supported on Events; subject-only via `contains()`). Returns recurrence series masters, not occurrences. | `query` (required), `limit?` (1–50, default 20) | `{ count, results: [] }` (same event shape). | `Calendars.Read` |
-| `m365-graph:get_event` | Fetches full details for a single event — body (capped at 8000 chars), attendees with response statuses, location, recurrence rule. | `event_id` (required) | event summary + `body` / `body_content_type` / `body_truncated` / `recurrence`. | `Calendars.Read` |
+| `m365-graph:get_event` | Fetches full details for a single event — body (capped at 8000 chars), attendees with response statuses, location, recurrence rule, online-meeting join URL when applicable. | `event_id` (required) | event summary + `body` / `body_content_type` / `body_truncated` / `recurrence` / `online_meeting_join_url`. | `Calendars.Read` |
 | `m365-graph:upload_file` | Uploads a local file to a drive. Auto-routes between single PUT (≤ 4 MB) and resumable upload session (> 4 MB, 10 MB chunks). 200 MB hard cap. | `local_path` (required), `drive_id?`, `parent_item_id?`, `name?`, `conflict_behavior?` (`fail`/`replace`/`rename`, default `fail`) | `{ uploaded: { id, name, size, webUrl, upload_path } }` | `Files.ReadWrite` |
 | `m365-graph:create_event` | Creates a new event on the user's primary calendar (or a specified calendar). Sends invitations to attendees by Graph default. | `subject` + `start` + `end` (required), `timezone?` (default UTC), `body?`, `body_content_type?` (`text`/`html`), `location?`, `attendees?`, `is_all_day?`, `calendar_id?` | `{ created: <event summary> }` | `Calendars.ReadWrite` |
 | `m365-graph:update_event` | Updates an existing event. All fields except `event_id` are optional; only provided fields are PATCHed. **Attendees: full replacement, not merge** — pass the full intended list. | `event_id` (required), then any subset of `subject`/`start`+`end`+`timezone`/`body`+`body_content_type`/`location`/`attendees`/`is_all_day` | `{ updated: <event summary> }` | `Calendars.ReadWrite` |
