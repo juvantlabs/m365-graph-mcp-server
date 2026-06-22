@@ -9,6 +9,33 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **`m365-graph:get_transcript`** silently truncated long Teams meeting
+  transcripts at 30 000 chars (parsed text) and 500 KB (raw VTT). Defaults
+  are now 200 000 chars / 10 MB — generous enough for multi-hour meetings —
+  and the byte cap loss is now flagged on the response (`vtt_truncated`).
+  Issue [#2](https://github.com/juvantlabs/m365-graph-mcp-server/issues/2).
+
+### Added
+
+- **`m365-graph:get_transcript`** — paging support. New optional inputs
+  `offset` (0..2_000_000_000) and `max_chars`. New response fields `offset`,
+  `next_offset`, `total_char_count`, and `vtt_truncated`. Existing fields
+  (`meeting_id`, `transcript_id`, `char_count`, `truncated`, `transcript`)
+  remain. Backward-compatible: prior callers passing only `meeting_id` +
+  `transcript_id` keep working; `truncated` now means "this slice does not
+  reach the end of the parsed text" (previously meant "30k cap hit", which
+  was always at offset 0 so the semantics align).
+- **`M365_TRANSCRIPT_MAX_BYTES`** env var — overrides the upstream VTT
+  byte cap (default 10 000 000).
+- **`M365_TRANSCRIPT_MAX_CHARS`** env var — overrides the per-call parsed-
+  text cap (default 200 000).
+
+---
+
 ## [0.2.0] - 2026-05-15
 
 ### Added

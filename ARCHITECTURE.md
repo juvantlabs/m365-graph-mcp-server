@@ -39,7 +39,12 @@ the auth path consolidated.
 **Meeting transcripts** (v0.2.0+)
 
 - List available transcripts for a Teams meeting (from a calendar event ID).
-- Fetch transcript content (VTT parsed to clean text, capped at 30 000 chars).
+- Fetch transcript content (VTT parsed to clean text). Long transcripts page
+  client-side via `offset` + `next_offset` — the Graph content endpoint
+  returns the whole VTT in one blob, so paging is implemented in this server
+  by slicing the parsed text. Per-call cap (`M365_TRANSCRIPT_MAX_CHARS`,
+  default 200 000) and upstream byte cap (`M365_TRANSCRIPT_MAX_BYTES`,
+  default 10 MB) are configurable.
 - Post-meeting only: live transcription during active calls requires a media bot
   (separate threat model; explicitly out of scope — see below).
 
