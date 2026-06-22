@@ -11,6 +11,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [0.3.0] - 2026-06-22 — Long Teams transcript paging + cap fix
+
 ### Fixed
 
 - **`m365-graph:get_transcript`** silently truncated long Teams meeting
@@ -33,6 +37,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   byte cap (default 10 000 000).
 - **`M365_TRANSCRIPT_MAX_CHARS`** env var — overrides the per-call parsed-
   text cap (default 200 000).
+
+### Security
+
+- `npm audit fix` to clear moderate+ advisories that were blocking CI. No
+  direct-dependency major bumps; transitive lockfile updates only.
 
 ---
 
@@ -326,4 +335,5 @@ the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
 
 ---
 
-[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/HEAD
+[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.1...v0.3.0
