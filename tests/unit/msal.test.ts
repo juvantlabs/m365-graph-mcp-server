@@ -57,6 +57,21 @@ describe("DELEGATED_SCOPES", () => {
   it("includes offline_access for refresh tokens", () => {
     expect(DELEGATED_SCOPES).toContain("offline_access");
   });
+
+  it("requests Sites.ReadWrite.All for SharePoint document libraries (v0.4.0)", () => {
+    expect(DELEGATED_SCOPES).toContain("Sites.ReadWrite.All");
+  });
+
+  it("does NOT request permission-mutation-class scopes (decisions#210)", () => {
+    // These scopes carry sharing-link / invite / permission-grant /
+    // ownership-transfer privileges and are deliberately excluded from
+    // the v0.4.0 baseline. Introducing any of them requires a
+    // permission_mutating-classified tool AND a CI Layer A allowlist
+    // entry — see .github/workflows/ci.yml.
+    expect(DELEGATED_SCOPES).not.toContain("Sites.Manage.All");
+    expect(DELEGATED_SCOPES).not.toContain("Sites.FullControl.All");
+    expect(DELEGATED_SCOPES).not.toContain("Application.ReadWrite.All");
+  });
 });
 
 describe("getAccessToken", () => {

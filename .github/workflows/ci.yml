@@ -152,3 +152,69 @@ jobs:
             echo "OK — every write_irreversible tool gates via confirmation_token + consumeConfirmation."
           fi
           exit "$fail"
+
+      - name: Permission-mutation surface invariant (decisions#210 Layer A)
+        run: |
+          set -euo pipefail
+          # Surface invariant for the `permission_mutating` ToolCategory.
+          #
+          # Two checks, both fail the build:
+          #
+          #   1. SCOPE check: src/auth/msal.ts MUST NOT include any of the
+          #      permission-mutation-class MSAL scopes
+          #      (Sites.Manage.All, Sites.FullControl.All,
+          #      Application.ReadWrite.All) unless at least one tool is
+          #      classified `category: "permission_mutating"` AND that
+          #      tool's filename appears in PERMISSION_MUTATING_ALLOWLIST
+          #      below. v0.4.0 baseline: zero such tools.
+          #
+          #   2. ENDPOINT check: no tool source under src/tools/ may grep-match
+          #      a permission/sharing Graph endpoint shape
+          #      (/permissions, createLink, /invite, assignSensitivityLabel,
+          #      transferOwnership) unless that tool is classified
+          #      `category: "permission_mutating"` AND on the allowlist.
+          #
+          # The allowlist is intentionally maintained INLINE in this workflow
+          # (not in src/) so adding a permission-mutating tool requires a
+          # CI/security-review diff that surfaces clearly in code review.
+          # The legal-ip-specific driveId deny-list is enforced DOWNSTREAM in
+          # the harness — this repo stays brand-agnostic per OSS host rules.
+
+          PERMISSION_MUTATING_ALLOWLIST=""   # empty in v0.4.0 baseline
+
+          fail=0
+
+          # --- (1) MSAL scope check ---------------------------------------
+          escalating_scopes='Sites\.Manage\.All|Sites\.FullControl\.All|Application\.ReadWrite\.All'
+          if grep -qE "\"($escalating_scopes)\"" src/auth/msal.ts; then
+            classified_count=$(grep -rEln 'category:\s*"permission_mutating"' src/tools/ | wc -l | tr -d ' ')
+            if [ "$classified_count" -eq 0 ]; then
+              echo "::error file=src/auth/msal.ts::MSAL scope set includes a permission-mutation-class scope (Sites.Manage.All / Sites.FullControl.All / Application.ReadWrite.All) but no tool is classified category=\"permission_mutating\". Either remove the scope or classify the consuming tool AND add its filename to PERMISSION_MUTATING_ALLOWLIST in .github/workflows/ci.yml (decisions#210 Layer A)."
+              fail=1
+            fi
+          fi
+
+          # --- (2) Endpoint-shape check -----------------------------------
+          # Patterns intentionally narrow: only fire on Graph-mutation shapes,
+          # not on doc comments. We look for: createLink( | /permissions" |
+          # /permissions') | /invite" | /invite') | assignSensitivityLabel(
+          # | transferOwnership(.
+          endpoint_pattern='createLink\(|/permissions["'\'']|/invite["'\'']|assignSensitivityLabel\(|transferOwnership\('
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if grep -qE 'category:\s*"permission_mutating"' "$file"; then
+              base=$(basename "$file")
+              if ! echo " $PERMISSION_MUTATING_ALLOWLIST " | grep -qE " $base "; then
+                echo "::error file=$file::Tool classified category=\"permission_mutating\" but its filename ($base) is not in PERMISSION_MUTATING_ALLOWLIST in .github/workflows/ci.yml. Add it explicitly to surface the change in code review (decisions#210 Layer A)."
+                fail=1
+              fi
+            else
+              echo "::error file=$file::Tool touches a permission/sharing Graph endpoint shape but is not classified category=\"permission_mutating\". Classify it AND add its filename to PERMISSION_MUTATING_ALLOWLIST in .github/workflows/ci.yml (decisions#210 Layer A)."
+              fail=1
+            fi
+          done < <(grep -rEln "$endpoint_pattern" src/tools/ || true)
+
+          if [ "$fail" -eq 0 ]; then
+            echo "OK — no unclassified permission-mutation surface; MSAL scope set within v0.4.0 baseline."
+          fi
+          exit "$fail"
