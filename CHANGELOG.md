@@ -11,6 +11,48 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - unreleased — SharePoint sites RW + permission-surface invariants
+
+### Added
+
+- **Delegated scope `Sites.ReadWrite.All`** in `src/auth/msal.ts`. Enables
+  read/write against SharePoint document libraries via the existing file
+  tools. Deliberately scoped: `Sites.Manage.All`, `Sites.FullControl.All`,
+  and `Application.ReadWrite.All` are NOT requested — those carry
+  permission-mutation privileges (sharing-link creation, guest invites,
+  permission grants, ownership transfer) outside the v0.4.0 threat model.
+- **`ToolCategory` value `permission_mutating`** (`src/types/tool.ts`),
+  distinct from `write_irreversible`. Reserved for operations that create
+  or modify standing access / sharing / ownership. v0.4.0 ships with zero
+  tools in this category — it is a pre-classification slot.
+
+### Security
+
+- **CI Layer A — permission-mutation surface invariant**
+  (`.github/workflows/ci.yml`). Two checks fail the build:
+  (1) the MSAL scope set in `src/auth/msal.ts` must not include
+  `Sites.Manage.All` / `Sites.FullControl.All` / `Application.ReadWrite.All`
+  unless at least one tool is classified `permission_mutating` AND its
+  filename is on `PERMISSION_MUTATING_ALLOWLIST` inside the workflow;
+  (2) any tool source under `src/tools/` matching a permission/sharing
+  Graph endpoint shape (`/permissions`, `createLink`, `/invite`,
+  `assignSensitivityLabel`, `transferOwnership`) must be classified
+  `permission_mutating` and on the same allowlist. The allowlist is
+  intentionally maintained inline in the workflow so additions surface
+  in code review.
+- **CI Layer B — synthetic permission-surface canary**
+  (`tests/unit/permission_surface.test.ts`). Static assertion over
+  `ALL_TOOLS` that every exposed tool is either scopable (declares a
+  drive/site/item/event/meeting/calendar/transcript id parameter in its
+  inputSchema), on the `NO_TARGET_TOOLS` allowlist, or classified
+  `permission_mutating`. Runs unconditionally — no tenant calls, no
+  secrets — so PR builds without `VENDOR_SANDBOX_TOKEN` still gate.
+- Baseline assertion: zero `permission_mutating` tools in v0.4.0.
+  Introducing the first one requires updating BOTH the test floor AND
+  the workflow allowlist in the same PR.
+
+Reference: decisions#210 (per-agent legal-ip enforcement architecture).
+
 ---
 
 ## [0.3.0] - 2026-06-22 — Long Teams transcript paging + cap fix

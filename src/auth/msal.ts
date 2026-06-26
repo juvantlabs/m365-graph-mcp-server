@@ -31,9 +31,19 @@ import { getTokenStore } from "./keyring.js";
 // Calendars.Read. The Entra app permissions list still includes the
 // narrower scopes (granted earlier) — they're harmless, just not
 // requested at token acquisition time.
+//
+// `Sites.ReadWrite.All` (added v0.4.0): delegated scope for SharePoint
+// document-library RW. Deliberately *not* `Sites.Manage.All` /
+// `Sites.FullControl.All` / `Application.ReadWrite.All` — those carry
+// permission-mutation privileges (sharing-link creation, guest invites,
+// permission grants, ownership transfer) that exceed the v0.4.0 threat
+// model. CI Layer A in `.github/workflows/ci.yml` fails the build if
+// any of those broader scopes are introduced without a matching
+// `permission_mutating` tool classification + allowlist entry.
 export const DELEGATED_SCOPES = [
   "User.Read",
   "Files.ReadWrite",
+  "Sites.ReadWrite.All",
   "Calendars.ReadWrite",
   "OnlineMeetings.Read",
   "OnlineMeetingTranscript.Read.All",

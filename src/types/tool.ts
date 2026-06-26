@@ -33,11 +33,26 @@ export interface ToolDefinition {
  *   to recipients, deletions without a deterministic restore path,
  *   payments). MUST gate via the two-phase confirmation token pattern
  *   (preview → token → execute) per ADR 0002. CI enforces this.
+ * - `permission_mutating` — operations that create/modify standing
+ *   access, sharing, or ownership of a resource (sharing-link creation,
+ *   guest invite, permission grant/revoke, sensitivity-label change,
+ *   ownership transfer). Distinct from `write_irreversible` because
+ *   the threat model is privilege escalation: a single call grants a
+ *   third party persistent access that survives the session and
+ *   bypasses content-level RW deny-lists. No tool in v0.4.0 carries
+ *   this category — it is a pre-classification slot. CI Layer A
+ *   (`.github/workflows/ci.yml`) fails the build if any future tool
+ *   touches a permission/sharing Graph endpoint without being
+ *   classified here AND added to the workflow's allowlist.
  *
  * Ambiguous categorizations resolve to the strictest. When in doubt,
  * gate it.
  */
-export type ToolCategory = "read" | "write_idempotent" | "write_irreversible";
+export type ToolCategory =
+  | "read"
+  | "write_idempotent"
+  | "write_irreversible"
+  | "permission_mutating";
 
 /**
  * Return shape for a tool handler. We use the SDK's `CallToolResult`
