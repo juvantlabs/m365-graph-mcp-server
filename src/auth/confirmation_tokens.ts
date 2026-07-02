@@ -94,13 +94,24 @@ export function consumeConfirmation(
   toolName: string,
   spec: Record<string, unknown>,
 ): ConsumeResult {
-  gc();
+  // Look up the token BEFORE the periodic GC pass so an expired-but-
+  // still-recorded entry reports as `token_expired`, not `token_unknown`
+  // — the two states are semantically distinct (expired says "you're
+  // late"; unknown says "there's no such token"). Only after this
+  // lookup do we GC other stale entries. For a security-relevant two-
+  // phase gate (delete_file, cancel_event, decline_event) this matters
+  // for the caller-facing UX and for audit signal fidelity.
   const entry = pending.get(token);
-  if (!entry) return { ok: false, error: "token_unknown" };
+  if (!entry) {
+    gc();
+    return { ok: false, error: "token_unknown" };
+  }
   if (entry.expiresAt <= Date.now()) {
     pending.delete(token);
+    gc();
     return { ok: false, error: "token_expired" };
   }
+  gc();
   if (entry.toolName !== toolName) {
     return { ok: false, error: "token_wrong_tool" };
   }
@@ -116,4 +127,18 @@ export function consumeConfirmation(
 // tool. Tests import this directly to ensure isolation.
 export function _resetConfirmationTokens(): void {
   pending.clear();
+}
+
+// Test helper — inject a pre-expired token so expiry paths can be
+// exercised deterministically without racing wall-clock time.
+export function _injectExpiredConfirmation(
+  token: string,
+  toolName: string,
+  spec: Record<string, unknown>,
+): void {
+  pending.set(token, {
+    toolName,
+    specHash: hashSpec(spec),
+    expiresAt: Date.now() - 1_000,
+  });
 }
