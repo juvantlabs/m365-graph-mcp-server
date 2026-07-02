@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  _injectExpiredConfirmation,
   _resetConfirmationTokens,
   consumeConfirmation,
   issueConfirmation,
@@ -68,6 +69,36 @@ describe("consumeConfirmation", () => {
     const { confirmation_token } = issueConfirmation("t", { x: 1 });
     expect(consumeConfirmation(confirmation_token, "t", { x: 1 })).toEqual({ ok: true });
     expect(consumeConfirmation(confirmation_token, "t", { x: 1 })).toEqual({
+      ok: false,
+      error: "token_unknown",
+    });
+  });
+
+  it("rejects an expired token with token_expired (distinct from token_unknown)", () => {
+    // Regression: pre-fix, gc() ran before the entry lookup so an expired-
+    // but-still-recorded entry was deleted first and the caller saw
+    // token_unknown. The two states are semantically distinct — expired
+    // says "you're late", unknown says "there's no such token" — and both
+    // are audit-relevant on a security-relevant two-phase gate
+    // (delete_file, cancel_event, decline_event).
+    _injectExpiredConfirmation("expired-token", "tool:foo", { item_id: "x" });
+    expect(consumeConfirmation("expired-token", "tool:foo", { item_id: "x" })).toEqual({
+      ok: false,
+      error: "token_expired",
+    });
+    // Expired token is dropped from the store on consume; a second attempt
+    // now falls through to token_unknown — proving the two outcomes are
+    // reachable independently.
+    expect(consumeConfirmation("expired-token", "tool:foo", { item_id: "x" })).toEqual({
+      ok: false,
+      error: "token_unknown",
+    });
+  });
+
+  it("token_unknown is returned for a token that was never issued (distinct from token_expired)", () => {
+    // Companion to the expired-token test: with no matching entry at all,
+    // the result must be token_unknown, never token_expired.
+    expect(consumeConfirmation("never-issued", "tool:foo", { item_id: "x" })).toEqual({
       ok: false,
       error: "token_unknown",
     });

@@ -13,6 +13,25 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0] - unreleased — SharePoint sites RW + permission-surface invariants
 
+### Fixed
+
+- **`consumeConfirmation` — expired token now reports `token_expired`,
+  not `token_unknown`** (`src/auth/confirmation_tokens.ts`). Pre-fix, the
+  periodic `gc()` pass ran BEFORE the entry lookup, so an expired-but-
+  still-recorded entry was garbage-collected first and the subsequent
+  `pending.get(token)` returned `undefined` — the caller saw
+  `token_unknown` and the `token_expired` code path was effectively
+  unreachable from wall-clock expiry. The two states are semantically
+  distinct (expired = "you're late"; unknown = "there's no such token")
+  and both are audit-relevant on a security-relevant two-phase gate
+  (`delete_file`, `cancel_event`, `decline_event`). Fix: look up the
+  entry FIRST, distinguish expired vs unknown, then run `gc()` on the
+  rest of the store. A new `_injectExpiredConfirmation` test helper and
+  two unit tests assert the distinct outcomes without racing wall-clock
+  time. Surfaced by a sibling MCP server (`m365-mail`) while porting the
+  same confirmation-token module. No behavior change on any other
+  outcome (`ok`, `token_wrong_tool`, `spec_mismatch` all unchanged).
+
 ### Added
 
 - **Delegated scope `Sites.ReadWrite.All`** in `src/auth/msal.ts`. Enables
