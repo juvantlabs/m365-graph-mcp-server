@@ -20,7 +20,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `POST /drives/{drive-id}/items/{parent-id}/children` with the
   `folder: {}` facet. Parameters: `name` (required), `parent_item_id?`
   (defaults to drive root), `drive_id?` (defaults to `/me/drive`),
-  `conflict_behavior?` (`fail` / `replace` / `rename`, default `fail`).
+  `conflict_behavior?` — **restricted to `fail` (default) | `rename`
+  by design**. `replace` is intentionally NOT exposed: Graph accepts
+  it, but replacing an existing folder is a near-destructive intent
+  (the existing folder — potentially with content — is displaced)
+  that would push this tool from `write_idempotent` toward
+  `write_irreversible` semantics and force a two-phase confirmation
+  gate. Callers that truly need replacement compose it from
+  `delete_file` (already two-phase-gated) + `create_folder`.
   Returns the created folder's item ID so agents can chain
   `upload_file(parent_item_id=<new_id>, …)` without a round-trip
   through `list_items`. Categorized `write_idempotent` — repeated

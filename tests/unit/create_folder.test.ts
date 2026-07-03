@@ -70,6 +70,25 @@ describe("createFolderTool handler", () => {
     ).rejects.toThrow("'conflict_behavior' must be one of");
   });
 
+  it("rejects conflict_behavior='replace' — deliberately not supported", async () => {
+    // 'replace' would displace an existing folder (with its content) and
+    // push this tool from write_idempotent toward write_irreversible
+    // semantics. Excluded by design; compose delete_file + create_folder
+    // if replacement is truly needed.
+    const { client } = captureRequest({ id: "x", name: "x", folder: {} });
+    await expect(
+      createFolderTool.handler(client, { name: "Aruba", conflict_behavior: "replace" }),
+    ).rejects.toThrow("'conflict_behavior' must be one of");
+  });
+
+  it("exposes only 'fail' and 'rename' in the JSON schema enum", () => {
+    const props = createFolderTool.definition.inputSchema.properties as Record<
+      string,
+      { enum?: unknown[] }
+    >;
+    expect(props.conflict_behavior?.enum).toEqual(["fail", "rename"]);
+  });
+
   it("POSTs to /me/drive/root/children by default", async () => {
     const { apiCalls, bodies, client } = captureRequest({
       id: "fld-1",
