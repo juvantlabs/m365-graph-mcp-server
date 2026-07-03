@@ -17,12 +17,17 @@
  *     "@microsoft.graph.conflictBehavior": "fail" | "replace" | "rename"
  *   }
  *
- * Conflict behavior:
- *   - `fail`    (default) — refuse if an item with that name exists
- *   - `replace` — replace the existing item (Graph accepts this; note
- *     that "replacing" an existing folder is a rare intent, so default
- *     stays `fail`)
- *   - `rename`  — let Graph auto-suffix (`Foo` → `Foo 1`)
+ * Conflict behavior — deliberately restricted to two values:
+ *   - `fail`   (default) — refuse if an item with that name exists
+ *   - `rename` — let Graph auto-suffix (`Foo` → `Foo 1`)
+ *
+ * `replace` is NOT exposed. Graph would accept it, but replacing an
+ * existing folder is a rare, near-destructive intent (the existing
+ * folder — potentially with content — is displaced) that would push
+ * this tool from `write_idempotent` toward `write_irreversible`
+ * semantics and force a two-phase confirmation gate. Excluded by
+ * design; if a caller truly needs replacement they compose it from
+ * `delete_file` (already two-phase-gated) + `create_folder`.
  *
  * Category: `write_idempotent` — a repeated call with
  * `conflict_behavior: fail` returns an error rather than creating a
@@ -55,13 +60,13 @@ import {
 } from "../types/validators.js";
 import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/tool.js";
 
-const CONFLICT_BEHAVIORS = ["fail", "replace", "rename"] as const;
+const CONFLICT_BEHAVIORS = ["fail", "rename"] as const;
 type ConflictBehavior = (typeof CONFLICT_BEHAVIORS)[number];
 
 const definition: ToolDefinition = {
   name: "m365-graph:create_folder",
   description:
-    "Create a folder in a drive (OneDrive primary by default; SharePoint document library via drive_id). Synchronous POST to /children. Default conflict behavior is 'fail' — set to 'rename' to auto-suffix on collision. Returns the created folder's item ID so it can be passed as parent_item_id to a subsequent upload_file / create_folder call.",
+    "Create a folder in a drive (OneDrive primary by default; SharePoint document library via drive_id). Synchronous POST to /children. Default conflict behavior is 'fail' — set to 'rename' to auto-suffix on collision. 'replace' is intentionally not supported (replacing an existing folder is near-destructive; compose delete_file + create_folder if you truly need replacement). Returns the created folder's item ID so it can be passed as parent_item_id to a subsequent upload_file / create_folder call.",
   inputSchema: {
     type: "object",
     properties: {
@@ -82,9 +87,9 @@ const definition: ToolDefinition = {
       },
       conflict_behavior: {
         type: "string",
-        enum: ["fail", "replace", "rename"],
+        enum: ["fail", "rename"],
         description:
-          "What to do if an item with this name already exists in the parent. Default: 'fail'.",
+          "What to do if an item with this name already exists in the parent. 'fail' (default) refuses; 'rename' lets Graph auto-suffix (Foo → Foo 1). 'replace' is intentionally not exposed — see tool description.",
       },
     },
     required: ["name"],
