@@ -16,6 +16,7 @@ import { listItemsTool } from "./list_items.js";
 import { searchFilesTool } from "./search_files.js";
 // Files — write
 import { copyFileTool } from "./copy_file.js";
+import { createFolderTool } from "./create_folder.js";
 import { deleteFileTool } from "./delete_file.js";
 import { moveFileTool } from "./move_file.js";
 import { uploadFileTool } from "./upload_file.js";
@@ -42,6 +43,7 @@ export const ALL_TOOLS: ReadonlyArray<Tool> = [
   downloadFileTool,
   // Files — write
   uploadFileTool,
+  createFolderTool,
   copyFileTool,
   moveFileTool,
   deleteFileTool,

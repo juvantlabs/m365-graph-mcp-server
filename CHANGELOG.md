@@ -13,6 +13,28 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0] - unreleased — SharePoint sites RW + permission-surface invariants
 
+### Added — Files
+
+- **`m365-graph:create_folder`** — new tool for creating folders in
+  OneDrive personal drives and SharePoint document libraries. Wraps
+  `POST /drives/{drive-id}/items/{parent-id}/children` with the
+  `folder: {}` facet. Parameters: `name` (required), `parent_item_id?`
+  (defaults to drive root), `drive_id?` (defaults to `/me/drive`),
+  `conflict_behavior?` (`fail` / `replace` / `rename`, default `fail`).
+  Returns the created folder's item ID so agents can chain
+  `upload_file(parent_item_id=<new_id>, …)` without a round-trip
+  through `list_items`. Categorized `write_idempotent` — repeated
+  calls with the default `fail` behavior converge on a single
+  effective state, and the created folder is reversible via
+  `delete_file`. No new Graph scope required: `Files.ReadWrite`
+  (OneDrive) and `Sites.ReadWrite.All` (SharePoint) already granted.
+  Filed as issue #10; motivated by real friction archiving invoices
+  into the `finance-invoices` SharePoint library where destination
+  folders (`Aruba/`, `_SDI-ufficiali/`, `Namecheap/`,
+  `_Personal-pre_startup/`) had to be created by hand in the web UI
+  before the server could upload into them. Total tool count is now
+  20 (5 write on files: upload, create_folder, copy, move, delete).
+
 ### Fixed
 
 - **`consumeConfirmation` — expired token now reports `token_expired`,
