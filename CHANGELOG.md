@@ -11,7 +11,15 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] - unreleased — SharePoint sites RW + permission-surface invariants
+## [0.4.1] - unreleased — folder creation + confirmation-token expiry semantics
+
+> Release-hygiene note: `[0.4.0]` was tag-published on 2026-06-26 from
+> commit `5235c78`. Three subsequent PRs (#9, #11, #12) merged to `main`
+> **without** a version bump on `package.json`, so the source tree
+> drifted from what's on npm. This `0.4.1` restores that alignment. See
+> the root-cause writeup in `docs/adr/` (forthcoming) and the follow-up
+> to add a CI guard that fails a merge when `package.json.version`
+> matches a version already in `npm view … versions`.
 
 ### Added — Files
 
@@ -34,10 +42,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   calls with the default `fail` behavior converge on a single
   effective state, and the created folder is reversible via
   `delete_file`. No new Graph scope required: `Files.ReadWrite`
-  (OneDrive) and `Sites.ReadWrite.All` (SharePoint) already granted.
-  Filed as issue #10; motivated by real friction archiving invoices
-  into the `finance-invoices` SharePoint library where destination
-  folders (`Aruba/`, `_SDI-ufficiali/`, `Namecheap/`,
+  (OneDrive) and `Sites.ReadWrite.All` (SharePoint) already granted
+  in 0.4.0. Filed as issue #10; motivated by real friction archiving
+  invoices into the `finance-invoices` SharePoint library where
+  destination folders (`Aruba/`, `_SDI-ufficiali/`, `Namecheap/`,
   `_Personal-pre_startup/`) had to be created by hand in the web UI
   before the server could upload into them. Total tool count is now
   20 (5 write on files: upload, create_folder, copy, move, delete).
@@ -60,6 +68,14 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   time. Surfaced by a sibling MCP server (`m365-mail`) while porting the
   same confirmation-token module. No behavior change on any other
   outcome (`ok`, `token_wrong_tool`, `spec_mismatch` all unchanged).
+  This fix was originally listed under `[0.4.0]` in the pre-audit
+  changelog, but did NOT make it into the npm-published 0.4.0 tarball
+  (verified by tarball inspection on 2026-07-04); it lands in the user-
+  visible surface only with this 0.4.1.
+
+---
+
+## [0.4.0] - 2026-06-26 — SharePoint sites RW + permission-surface invariants
 
 ### Added
 
@@ -100,6 +116,11 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the workflow allowlist in the same PR.
 
 Reference: decisions#210 (per-agent legal-ip enforcement architecture).
+
+Published from tag `v0.4.0` → commit `5235c78`. **Note**: the fix
+`consumeConfirmation reports token_expired distinctly from
+token_unknown` was originally targeted for this release but landed on
+`main` after the tag was cut; it ships in `0.4.1`.
 
 ---
 
