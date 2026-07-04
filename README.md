@@ -32,10 +32,13 @@ See [CHANGELOG.md](CHANGELOG.md) for the full change list.
 
 ## Status
 
-**Published.** v0.3.0 on npm
-([`@juvantlabs/m365-graph-mcp-server`](https://www.npmjs.com/package/@juvantlabs/m365-graph-mcp-server)).
-19 tools across files (OneDrive + SharePoint), Outlook Calendar, and
-Teams meeting transcripts. Published via npm **Trusted Publishing**
+**Published.** v0.4.0 on npm
+([`@juvantlabs/m365-graph-mcp-server`](https://www.npmjs.com/package/@juvantlabs/m365-graph-mcp-server)),
+released 2026-06-26. 19 tools across files (OneDrive + SharePoint),
+Outlook Calendar, and Teams meeting transcripts. v0.4.1 is prepared
+on `main` — adds `create_folder` (bringing the tool count to 20) and
+fixes the `consumeConfirmation` gc-ordering bug; pending manual tag +
+release trigger. Published via npm **Trusted Publishing**
 (OIDC-based auth from GitHub Actions; no static `NPM_TOKEN`) with
 provenance attestation; manual approval gate on the `production`
 GitHub Environment guards the publish step.
@@ -96,7 +99,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 {
   "m365-graph": {
     "provider": "microsoft",
-    "mcp_server": "npx @juvantlabs/m365-graph-mcp-server@0.3.0",
+    "mcp_server": "npx @juvantlabs/m365-graph-mcp-server@0.4.0",
     "scope": "rw"
   }
 }
