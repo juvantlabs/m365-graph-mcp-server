@@ -1,0 +1,55 @@
+{
+  "generated_by": "@azure/msal-node 5.1.5",
+  "cache": {
+    "Account": {
+      "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111-login.windows.net-11111111-1111-1111-1111-111111111111": {
+        "home_account_id": "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111",
+        "environment": "login.windows.net",
+        "realm": "11111111-1111-1111-1111-111111111111",
+        "local_account_id": "33333333-3333-3333-3333-333333333333",
+        "username": "user@example.test",
+        "authority_type": "MSSTS",
+        "name": "Example User",
+        "client_info": "eyJ1aWQiOiIzMzMzMzMzMy0zMzMzLTMzMzMtMzMzMy0zMzMzMzMzMzMzMzMiLCJ1dGlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIn0",
+        "tenantProfiles": [
+          "{\"tenantId\":\"11111111-1111-1111-1111-111111111111\",\"localAccountId\":\"33333333-3333-3333-3333-333333333333\",\"name\":\"Example User\",\"username\":\"user@example.test\",\"isHomeTenant\":true}"
+        ]
+      }
+    },
+    "IdToken": {
+      "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111-login.windows.net-idtoken-22222222-2222-2222-2222-222222222222-11111111-1111-1111-1111-111111111111--": {
+        "home_account_id": "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111",
+        "environment": "login.windows.net",
+        "credential_type": "IdToken",
+        "client_id": "22222222-2222-2222-2222-222222222222",
+        "secret": "<synthetic-id-token>",
+        "realm": "11111111-1111-1111-1111-111111111111"
+      }
+    },
+    "AccessToken": {
+      "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111-login.windows.net-accesstoken-22222222-2222-2222-2222-222222222222-11111111-1111-1111-1111-111111111111-user.read files.readwrite sites.readwrite.all calendars.readwrite onlinemeetings.read onlinemeetingtranscript.read.all-": {
+        "home_account_id": "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111",
+        "environment": "login.windows.net",
+        "credential_type": "AccessToken",
+        "client_id": "22222222-2222-2222-2222-222222222222",
+        "secret": "legacy-access-token",
+        "realm": "11111111-1111-1111-1111-111111111111",
+        "target": "User.Read Files.ReadWrite Sites.ReadWrite.All Calendars.ReadWrite OnlineMeetings.Read OnlineMeetingTranscript.Read.All",
+        "cached_at": "1793714826",
+        "expires_on": "3993714826",
+        "extended_expires_on": "6193714826",
+        "token_type": "Bearer"
+      }
+    },
+    "RefreshToken": {
+      "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111-login.windows.net-refreshtoken-22222222-2222-2222-2222-222222222222---": {
+        "home_account_id": "33333333-3333-3333-3333-333333333333.11111111-1111-1111-1111-111111111111",
+        "environment": "login.windows.net",
+        "credential_type": "RefreshToken",
+        "client_id": "22222222-2222-2222-2222-222222222222",
+        "secret": "legacy-refresh-token"
+      }
+    },
+    "AppMetadata": {}
+  }
+}

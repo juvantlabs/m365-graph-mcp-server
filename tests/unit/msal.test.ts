@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { entryConstructor } = vi.hoisted(() => ({
-  entryConstructor: vi.fn().mockImplementation(() => ({
-    setPassword: vi.fn(),
-    getPassword: vi.fn().mockImplementation(() => {
-      throw new Error("no entry");
-    }),
-    deletePassword: vi.fn(),
-  })),
+  // Vitest 4: a mock invoked with `new` needs a `function` (not arrow) implementation.
+  entryConstructor: vi.fn().mockImplementation(function () {
+    return {
+      setPassword: vi.fn(),
+      getPassword: vi.fn().mockImplementation(() => {
+        throw new Error("no entry");
+      }),
+      deletePassword: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("@napi-rs/keyring", () => ({
