@@ -208,7 +208,7 @@ Each row is also reflected in [`README.md`](README.md) § Tools.
 | `m365-graph:list_drives` | `GET /me/drive`, `GET /me/drives` | _(none)_ | `{ primary, accessible: [] }` | `Files.Read` | First-ship; validates the auth + Graph plumbing end-to-end. |
 | `m365-graph:list_items` | `GET /me/drive/root/children` or `GET /drives/{id}/items/{item}/children` | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` | `Files.Read` | Item type derived from presence of `folder` facet. `child_count` populated only for folders. |
 | `m365-graph:search_files` | `GET /drives/{id}/root/search(q='…')` (defaults to `/me/drive`) | `query`, `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with virtual `path` joining `parentReference.path` + `name` | `Files.Read` | OData function call; query single quotes are escaped (`'` → `''`). |
-| `m365-graph:download_file` | `GET /me/drive/items/{id}` for metadata, then `GET @microsoft.graph.downloadUrl` (Graph CDN) for the bytes | `item_id`, `drive_id?` | `{ local_path, size_bytes, name, content_type }` | `Files.Read` | **Sandboxed**: writes only under `<sandbox>/<tenant>/<sha256(item_id)[:16]>-<sanitized name>`. Streamed via fetch + Node `pipeline`; no whole-file buffering. 200 MB cap, refused pre-fetch via metadata size. Folders rejected. |
+| `m365-graph:download_file` | `GET /me/drive/items/{id}` for metadata, then `GET @microsoft.graph.downloadUrl` (Graph CDN) for the bytes. With `format`: `GET {drive}/items/{id}/content?format=pdf` → 302 → `GET <Location>` | `item_id`, `drive_id?`, `format?` (`pdf`) | `{ local_path, size_bytes, name, content_type }` (+ `format`, `source_size_bytes`, `source_content_type` when converting) | `Files.Read` | **Sandboxed**: writes only under `<sandbox>/<tenant>/<sha256(item_id)[:16]>-<sanitized name>`. Streamed via fetch + Node `pipeline`; no whole-file buffering. 200 MB cap, refused pre-fetch via metadata size. Folders rejected. **Server-side conversion** (see § Download sandboxing): strict `format` enum, pre-flight source-type allowlist, redirect followed by the tool without the bearer token, 200 MB cap re-enforced on the converted stream. |
 | `m365-graph:list_calendars` | `GET /me/calendars` | `limit?` (1–100, default 50) | `{ count, calendars: [] }` | `Calendars.Read` | Owner extracted from `owner.{name,address}`; falls back to null. |
 | `m365-graph:list_events` | `GET /me/calendarView` (or `/me/calendars/{id}/calendarView`) with `startDateTime` + `endDateTime` query params | `start`, `end` (ISO 8601), `calendar_id?`, `limit?` (1–200, default 100) | `{ window, count, events: [] }` | `Calendars.Read` | **Recurrences expanded** (calendarView vs /events). Ordered by `start/dateTime` ascending. ISO 8601 input lightly validated client-side (regex), Graph does the strict parse. |
 | `m365-graph:search_events` | `GET /me/events?$filter=contains(subject, '…')` | `query`, `limit?` (1–50, default 20) | `{ count, results: [] }` | `Calendars.Read` | Subject-only substring match. `$search` is not supported on the Events resource by Graph; body search would require POST `/search/query` (separate API, deferred). Single-quote escaping (`'` → `''`) on the query. **Series masters**, not expanded occurrences. |
@@ -269,6 +269,46 @@ sandbox root before writing.
 
 Mode: dirs `0o700`, files `0o600` so other users on a shared host
 can't read downloaded content.
+
+The same item always maps to the same local path; a repeat download
+overwrites the previous copy.
+
+#### Server-side format conversion
+
+`download_file` accepts an optional `format` (strict enum; today only
+`pdf`). Conversion happens entirely in Microsoft Graph — the server runs
+no converter and never executes anything on the file:
+
+1. **Validation.** `format` must be exactly one of the enum values; the
+   query string is built from the server-side constant, never from the
+   raw caller string. The source name's extension is checked against the
+   types Graph documents as PDF-convertible (`doc`, `docx`, `dot`,
+   `dotx`, `dotm`, `dsn`, `dwg`, `eml`, `epub`, `fluidframework`, `htm`,
+   `html`, `loop`, `markdown`, `md`, `msg`, `odp`, `ods`, `odt`, `pps`,
+   `ppsx`, `ppt`, `pptx`, `rtf`, `tif`, `tiff`, `xls`, `xlsm`, `xlsx`).
+   Anything else — including a file that is already a PDF — fails
+   before the conversion request with an error naming the supported
+   types.
+2. **Request.** `GET {drive}/items/{id}/content?format=pdf` with the
+   SDK's automatic redirect-following disabled.
+3. **Redirect.** Graph answers `302` with a pre-authenticated `Location`.
+   The tool requires an absolute `https` URL and fetches it **without**
+   the bearer token — the same trust model as
+   `@microsoft.graph.downloadUrl`. A direct `200` with the body is also
+   accepted. Graph `406`/`415`/`notSupported` responses are reported as
+   a conversion failure (the file may be encrypted, corrupt, or not
+   convertible); other statuses surface with their Graph error code.
+4. **Write.** The 200 MB source cap applies pre-flight as usual; since
+   the converted size is unknown in advance, the cap is re-enforced on
+   the stream (`Content-Length` when present, plus a byte counter). A
+   capped or failed transfer leaves no partial file.
+5. **Naming.** `<sha256(item_id)[:16]>-<stem>.pdf` — the original
+   extension is replaced, so the converted copy never collides with a
+   plain download of the same item, and the stem is trimmed so the
+   200-character filename cap cannot cut the `.pdf` extension.
+
+No additional Graph scope is required: conversion is a read on the same
+item (`Files.Read` / `Sites.Read.All` or broader for SharePoint drives).
 
 ## Input validation
 

@@ -11,7 +11,42 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.1] - unreleased — folder creation + confirmation-token expiry semantics
+## [0.5.0] - unreleased — server-side PDF conversion in `download_file`
+
+### Added — Files
+
+- **`m365-graph:download_file` — optional `format` parameter
+  (`"pdf"`).** When set, the tool asks Microsoft Graph to convert the
+  file server-side via `GET {drive}/items/{id}/content?format=pdf` and
+  saves the resulting PDF to the sandbox instead of the original bytes.
+  This lets agents read Word / Excel / PowerPoint / OpenDocument / RTF /
+  HTML / Markdown / email / TIFF documents through a plain PDF reader
+  with no local converter (no subprocess, no new executable surface).
+  - `format` is a strict enum; the query value is a server-side
+    constant, never the raw caller string.
+  - Source type is checked pre-flight against the extensions Graph
+    documents as PDF-convertible. Unsupported types (and files that are
+    already PDFs) fail fast with an error listing the supported types.
+    Graph-side conversion failures (`406` / `415` / `notSupported`) are
+    reported as such; other Graph errors surface with status and code.
+  - Graph's `302` to the converted content is handled explicitly: the
+    SDK's redirect-following is disabled for this call, the `Location`
+    must be an absolute `https` URL, and it is fetched without the
+    bearer token (same trust model as `@microsoft.graph.downloadUrl`).
+  - Same sandbox (`0700` dir / `0600` file, per-tenant root), same
+    naming and overwrite policy: `<sha256(item_id)[:16]>-<stem>.pdf`.
+    The 200 MB cap applies to the source pre-flight and is re-enforced
+    on the converted stream; a capped or failed transfer leaves no
+    partial file.
+  - Additive output fields when converting: `format`,
+    `source_size_bytes`, `source_content_type`; `content_type` is
+    `application/pdf` and `size_bytes` is the size of the PDF on disk.
+    Output without `format` is unchanged.
+  - No new Graph scope.
+- **Validators**: `validateOptionalStrictEnum` (optional enum with no
+  default) and `validateHttpsUrl` in `src/types/validators.ts`.
+
+## [0.4.1] - 2026-07-04 — folder creation + confirmation-token expiry semantics
 
 > Release-hygiene note: `[0.4.0]` was tag-published on 2026-06-26 from
 > commit `5235c78`. Three subsequent PRs (#9, #11, #12) merged to `main`
@@ -479,7 +514,10 @@ the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
 
 ---
 
-[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.1.4...v0.2.0
