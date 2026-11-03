@@ -11,7 +11,27 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.2] - unreleased — dependency security remediation
+## [0.4.3] - unreleased — publish-workflow fix; first npm release of the 0.4.2 content
+
+Ships everything listed under `[0.4.2]` below (that version was tagged
+but never reached npm). No tool, schema or behaviour change.
+
+### Fixed — release pipeline
+
+- **`publish.yml`: pin the npm upgrade to `npm@^11.5.1`** instead of
+  `npm@latest`. npm 12 dropped Node 20 (engines `^22.22.2 || ^24.15.0
+  || >=26`), so `npm install -g npm@latest` failed with `EBADENGINE` on
+  the Node 20 publish job and the `v0.4.2` run published nothing.
+  11.5.1 is the npm Trusted Publishing minimum, and npm 11 supports
+  Node `^20.17.0` (the job runs Node 20.20.x). `ci.yml` does not upgrade
+  npm and is unaffected.
+
+## [0.4.2] - tagged, never published — dependency security remediation
+
+> **Not on npm.** The `v0.4.2` tag exists, but its publish run failed at
+> the npm-upgrade step (see `[0.4.3]`) before anything was published.
+> The tag was deliberately not moved; this content first ships in
+> **0.4.3**.
 
 No tool, schema or behaviour change. Clears every `npm audit` advisory
 (34 → 0: 3 critical, 13 high, 17 moderate, 1 low) so the CI and publish
@@ -556,7 +576,8 @@ the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
 
 ---
 
-[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...v0.4.0
