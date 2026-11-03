@@ -46,6 +46,83 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Validators**: `validateOptionalStrictEnum` (optional enum with no
   default) and `validateHttpsUrl` in `src/types/validators.ts`.
 
+## [0.4.2] - unreleased — dependency security remediation
+
+No tool, schema or behaviour change. Clears every `npm audit` advisory
+(34 → 0: 3 critical, 13 high, 17 moderate, 1 low) so the CI and publish
+audit gate (`--audit-level=moderate`, unchanged) passes again. No
+advisory is ignored.
+
+### Security — runtime dependencies (shipped)
+
+- **`@azure/msal-node` `^5.0.0` → `^7.1.2`** (high; affected range
+  5.0.0-beta.0 – 7.0.2; resolved 5.1.5 → 7.1.2; `@azure/msal-common`
+  stays on the 16.x line, 16.5.2 → 16.15.0). Migration review:
+  - v6 / v7 breaking changes are confined to
+    `PublicClientApplication.acquireTokenInteractive` (`form_post`
+    default, then `responseMode` removed; custom `loopbackClient` /
+    `ILoopbackClient` removed; loopback GET callbacks rejected). This
+    server uses `ConfidentialClientApplication` with a manually hosted
+    authorization-code flow (`getAuthCodeUrl` + own localhost listener +
+    `acquireTokenByCode`), `acquireTokenSilent`, and a custom
+    `ICachePlugin` on the OS keychain — none of which changed contract.
+    No device-code or interactive (`acquireTokenInteractive`) path
+    exists here.
+  - `getAuthCodeUrl` on a confidential client still defaults to
+    `response_mode=query`, which the setup listener reads.
+  - Since 5.6 / 6.0.1, `acquireTokenByCode` validates the ID-token nonce
+    strictly. Setup sends no nonce, so Entra issues none and the
+    exchange passes; the two setup requests are now built by
+    `authCodeUrlRequest()` / `authCodeTokenRequest()` in
+    `src/auth/msal.ts` so they cannot drift apart.
+  - 7.0.2 / 7.1.0 sanitize the auth-code payload and reject
+    `instanceAware` for confidential clients — not used here.
+  - 7.0.0 coalesces concurrent identical silent-token requests
+    (beneficial for parallel tool calls).
+  - Token-cache format: a cache serialized by 5.1.5 is read by 7.1.2
+    and refreshes with its refresh token — existing keychain entries
+    keep working; no re-run of `setup` expected.
+- **`@modelcontextprotocol/sdk` `^1.25.2` → `^1.32.2`** (high; also
+  clears transitive `hono`, `@hono/node-server`, `express-rate-limit`,
+  `body-parser`, `proxy-addr` (critical), `qs`, `fast-uri`, `zod`,
+  `ip-address`).
+
+### Security — development toolchain (not shipped)
+
+- `vitest` / `@vitest/coverage-v8` `^3` → `^4.1.12` (critical via
+  `vitest`, `tinypool`; also `vite`, `esbuild`, `postcss`, `nanoid`,
+  `source-map-js`, `glob`, `test-exclude`, `js-yaml`). Vitest 5 was not
+  taken: it requires Node ≥ 22 and this package supports Node ≥ 20.
+- `eslint` `^9` → `^10.14.0`, `@typescript-eslint/*` → `^8.72.1`,
+  `tsx` → `^4.23.15`.
+- `overrides.minimatch: ^11.0.1` (moderate, GHSA-g3hv-75wg-m249). Every
+  current ESLint / typescript-eslint release still depends on
+  minimatch 10.x and there is no 10.x backport, so the patched major is
+  forced. Its consumers here only use `new Minimatch(pattern, { dot })`,
+  `Minimatch#match` and the named `minimatch()` — all retained in 11.x
+  (11.0 removed `makeRe`, `regexp`, `AST`, `debug`, none of which they
+  call).
+
+### Tests
+
+- Vitest 4: constructor mocks (`new Entry(...)`) now use `function`
+  implementations (arrow functions are not constructible under v4).
+- `@vitest/coverage-v8` 4 counts lines and branches more strictly; the
+  per-file thresholds (unchanged) are met by new tests rather than by
+  lowering them: plain streaming download (`download_file_stream`),
+  resumable large-file upload (`upload_file_large`), and search result
+  mapping.
+- New `msal_contract.test.ts` runs the **real** msal-node offline (fake
+  keychain + fake token endpoint): setup URL (`response_mode=query`, no
+  nonce), code exchange → keychain → silent token after restart, strict
+  nonce rejection, and a keychain cache written by msal-node 5.1.5
+  (fixture + generator in `tests/fixtures/msal-legacy-cache/`) yielding
+  its token and refreshing with its refresh token. The fixture stores a
+  placeholder instead of the JWT-shaped synthetic ID token (secret
+  scanning treats it as a credential); the test rebuilds it at load.
+- `makeMsalClient()` accepts optional offline-metadata / network-module
+  overrides (test seam; production passes none).
+
 ## [0.4.1] - 2026-07-04 — folder creation + confirmation-token expiry semantics
 
 > Release-hygiene note: `[0.4.0]` was tag-published on 2026-06-26 from
@@ -515,7 +592,8 @@ the Juvant OS instance level — see juvant-os-pm FEAT-018 / 019 /
 ---
 
 [Unreleased]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.5.0...HEAD
-[0.5.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.1...v0.5.0
+[0.5.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.2...v0.5.0
+[0.4.2]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/juvantlabs/m365-graph-mcp-server/compare/v0.2.1...v0.3.0
