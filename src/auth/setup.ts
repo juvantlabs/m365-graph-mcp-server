@@ -19,7 +19,12 @@ import { exec } from "node:child_process";
 import http from "node:http";
 import { URL } from "node:url";
 
-import { DELEGATED_SCOPES, REDIRECT_URI, makeMsalClient } from "./msal.js";
+import {
+  REDIRECT_URI,
+  authCodeTokenRequest,
+  authCodeUrlRequest,
+  makeMsalClient,
+} from "./msal.js";
 
 const CALLBACK_PORT = 3000;
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -98,11 +103,7 @@ function waitForAuthCode(): Promise<string> {
 export async function runSetup(): Promise<void> {
   const client = makeMsalClient();
 
-  const authUrl = await client.getAuthCodeUrl({
-    scopes: DELEGATED_SCOPES,
-    redirectUri: REDIRECT_URI,
-    prompt: "select_account",
-  });
+  const authUrl = await client.getAuthCodeUrl(authCodeUrlRequest());
 
   console.error("[setup] Starting OAuth flow against tenant:", process.env.M365_TENANT_ID);
   console.error("[setup] If your browser does not open automatically, visit:");
@@ -116,11 +117,7 @@ export async function runSetup(): Promise<void> {
   const code = await waitForAuthCode();
 
   console.error("[setup] Authorization code received. Exchanging for tokens…");
-  const tokenResponse = await client.acquireTokenByCode({
-    code,
-    scopes: DELEGATED_SCOPES,
-    redirectUri: REDIRECT_URI,
-  });
+  const tokenResponse = await client.acquireTokenByCode(authCodeTokenRequest(code));
 
   if (!tokenResponse?.account) {
     throw new Error("Token acquisition succeeded but no account info was returned.");

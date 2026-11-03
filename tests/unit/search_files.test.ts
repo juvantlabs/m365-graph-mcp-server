@@ -74,3 +74,37 @@ describe("searchFilesTool handler", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("searchFilesTool handler — result mapping", () => {
+  it("maps every Graph hit through summarizeSearchHit and reports the count", async () => {
+    const { client } = captureApiPath({
+      value: [
+        {
+          id: "a",
+          name: "report.docx",
+          size: 10,
+          parentReference: { path: "/drive/root:/Legal" },
+          lastModifiedDateTime: "2026-01-01T00:00:00Z",
+          webUrl: "https://example/a",
+        },
+        { id: "b", name: "Archive", folder: { childCount: 2 } },
+      ],
+    });
+    const res = await searchFilesTool.handler(client, { query: "report" });
+    const out = JSON.parse((res.content[0] as { text: string }).text);
+    expect(out.count).toBe(2);
+    expect(out.results[0]).toMatchObject({
+      id: "a",
+      path: "/drive/root:/Legal/report.docx",
+      size: 10,
+      is_folder: false,
+    });
+    expect(out.results[1]).toMatchObject({ id: "b", path: "Archive", is_folder: true });
+  });
+
+  it("treats a missing value array as zero results", async () => {
+    const { client } = captureApiPath({});
+    const res = await searchFilesTool.handler(client, { query: "x" });
+    expect(JSON.parse((res.content[0] as { text: string }).text).count).toBe(0);
+  });
+});

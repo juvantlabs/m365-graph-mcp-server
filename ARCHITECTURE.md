@@ -290,9 +290,9 @@ security smell (handbook anti-pattern S1).
 
 | Dependency | Version | Why |
 |---|---|---|
-| `@modelcontextprotocol/sdk` | `^1.25.2` | MCP framing; ≥1.25.2 required (ReDoS + DNS rebinding fixes — audit C7) |
+| `@modelcontextprotocol/sdk` | `^1.32.2` | MCP framing; ≥1.25.2 required (ReDoS + DNS rebinding fixes — audit C7); ≥1.32 clears the late-2026 `npm audit` advisories on the SDK and its transitive HTTP stack. |
 | `@microsoft/microsoft-graph-client` | `^3.0.7` | Microsoft's official Graph SDK — handles batching, retries, types |
-| `@azure/msal-node` | `^5.0.0` | OAuth — never roll auth. v5+ avoids transitive `uuid <14` GHSA-w5hq-g745-h8pq. |
+| `@azure/msal-node` | `^7.1.2` | OAuth — never roll auth. v5+ avoids transitive `uuid <14` GHSA-w5hq-g745-h8pq; v7.1.2 clears the high-severity advisory affecting 5.0.0-beta.0 – 7.0.2. The v6/v7 majors only change `PublicClientApplication.acquireTokenInteractive` (unused here); the confidential-client auth-code flow, `getAuthCodeUrl` defaults and the token-cache format are unchanged — pinned by `tests/unit/msal_contract.test.ts`, including a cache fixture written by 5.1.5. |
 | `@napi-rs/keyring` | `^1.3.0` | OS keychain for token persistence; replaces archived `keytar`. |
 | `isomorphic-fetch` | `^3.0.0` | Peer dep of the Graph SDK. |
 

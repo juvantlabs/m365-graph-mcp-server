@@ -12,6 +12,8 @@
 
 import {
   ConfidentialClientApplication,
+  type AuthorizationCodeRequest,
+  type AuthorizationUrlRequest,
   type Configuration,
   type ICachePlugin,
   type TokenCacheContext,
@@ -58,6 +60,35 @@ export const DELEGATED_SCOPES = [
 export const REDIRECT_URI = "http://localhost:3000/auth/callback";
 
 /**
+ * Authorization-URL request used by `setup`. Deliberately no `nonce`
+ * and no `responseMode`:
+ *   - the confidential-client `getAuthCodeUrl` defaults to
+ *     `response_mode=query`, which is what the setup localhost listener
+ *     reads (GET `?code=`);
+ *   - `acquireTokenByCode` (msal-node ≥ 5.6) validates the ID-token
+ *     nonce strictly — if a nonce were sent here it would also have to be
+ *     passed to the code exchange, otherwise the exchange fails with
+ *     `nonce_mismatch`. Sending none keeps the two requests consistent.
+ * Pinned by tests/unit/msal_contract.test.ts.
+ */
+export function authCodeUrlRequest(): AuthorizationUrlRequest {
+  return {
+    scopes: DELEGATED_SCOPES,
+    redirectUri: REDIRECT_URI,
+    prompt: "select_account",
+  };
+}
+
+/** Code-exchange request used by `setup`; mirrors authCodeUrlRequest(). */
+export function authCodeTokenRequest(code: string): AuthorizationCodeRequest {
+  return {
+    code,
+    scopes: DELEGATED_SCOPES,
+    redirectUri: REDIRECT_URI,
+  };
+}
+
+/**
  * Build the MSAL cache plugin for a given tenant. Exported so tests
  * can drive the load/save lifecycle directly with a fake
  * TokenCacheContext + spied keychain store.
@@ -79,17 +110,36 @@ export function makeCachePlugin(tenantId: string): ICachePlugin {
   };
 }
 
-export function makeMsalClient(): ConfidentialClientApplication {
+/**
+ * Optional, additive overrides. Production calls `makeMsalClient()` with
+ * none; tests pass offline authority/cloud-discovery metadata and a fake
+ * network module so the real MSAL code paths run without a tenant.
+ * Credentials, authority and cache plugin are never overridable here.
+ */
+export interface MsalClientOverrides {
+  authorityMetadata?: string;
+  cloudDiscoveryMetadata?: string;
+  system?: Configuration["system"];
+}
+
+export function makeMsalClient(overrides: MsalClientOverrides = {}): ConfidentialClientApplication {
   const tenantId = process.env.M365_TENANT_ID ?? "";
   const config: Configuration = {
     auth: {
       clientId: process.env.M365_CLIENT_ID ?? "",
       clientSecret: process.env.M365_CLIENT_SECRET ?? "",
       authority: `https://login.microsoftonline.com/${tenantId}`,
+      ...(overrides.authorityMetadata !== undefined
+        ? { authorityMetadata: overrides.authorityMetadata }
+        : {}),
+      ...(overrides.cloudDiscoveryMetadata !== undefined
+        ? { cloudDiscoveryMetadata: overrides.cloudDiscoveryMetadata }
+        : {}),
     },
     cache: {
       cachePlugin: makeCachePlugin(tenantId),
     },
+    ...(overrides.system !== undefined ? { system: overrides.system } : {}),
   };
   return new ConfidentialClientApplication(config);
 }
