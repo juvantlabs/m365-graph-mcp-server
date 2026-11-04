@@ -27,8 +27,12 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Source type is checked pre-flight against the extensions Graph
     documents as PDF-convertible. Unsupported types (and files that are
     already PDFs) fail fast with an error listing the supported types.
-    Graph-side conversion failures (`406` / `415` / `notSupported`) are
-    reported as such; other Graph errors surface with status and code.
+    Graph-side conversion failures (`406` / `415` / `notSupported`,
+    including a `400` with that code) are reported as such and name the
+    source extension. Any other `400` also names the extension but does
+    not claim the source type is the cause. Other Graph errors surface
+    with status and code. A refused conversion never falls back to the
+    original bytes.
   - Graph's `302` to the converted content is handled explicitly: the
     SDK's redirect-following is disabled for this call, the `Location`
     must be an absolute `https` URL, and it is fetched without the

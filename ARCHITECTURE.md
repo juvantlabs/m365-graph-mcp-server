@@ -295,9 +295,14 @@ no converter and never executes anything on the file:
    The tool requires an absolute `https` URL and fetches it **without**
    the bearer token — the same trust model as
    `@microsoft.graph.downloadUrl`. A direct `200` with the body is also
-   accepted. Graph `406`/`415`/`notSupported` responses are reported as
-   a conversion failure (the file may be encrypted, corrupt, or not
-   convertible); other statuses surface with their Graph error code.
+   accepted. Graph `406`/`415`/`notSupported` responses, including a
+   `400` with the `notSupported` code, are reported as a conversion
+   failure naming the source extension (the file may be encrypted,
+   corrupt, or not convertible). Any other `400` also names the extension
+   but does not claim the source type is the cause, because the status
+   alone cannot establish that. Other statuses surface with their Graph
+   error code. A refused conversion never falls back to the original
+   bytes.
 4. **Write.** The 200 MB source cap applies pre-flight as usual; since
    the converted size is unknown in advance, the cap is re-enforced on
    the stream (`Content-Length` when present, plus a byte counter). A

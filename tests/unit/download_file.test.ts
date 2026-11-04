@@ -203,6 +203,10 @@ describe("fileExtension / checkConvertible", () => {
     },
   );
 
+  it("returns the validated, lower-cased source extension", () => {
+    expect(checkConvertible("Deck.PPTX", "pdf")).toBe("pptx");
+  });
+
   it("rejects an unsupported extension and lists the supported ones", () => {
     expect(() => checkConvertible("archive.zip", "pdf")).toThrow(
       /Cannot convert 'archive\.zip' to PDF: the file has extension '\.zip'.*Supported source types: .*docx/,
@@ -458,8 +462,75 @@ describe("downloadFileTool handler — format: 'pdf'", () => {
     await expect(
       downloadFileTool.handler(client, { item_id: "01DOC", format: "pdf" }),
     ).rejects.toThrow(
-      "Microsoft Graph could not convert 'NDA.docx' to PDF: HTTP 406 (notSupported: Conversion not supported)",
+      "Microsoft Graph could not convert 'NDA.docx' to PDF: HTTP 406 (notSupported: Conversion not supported). Source extension: '.docx'.",
     );
+  });
+
+  it("names the source extension for a 415 with no error body", async () => {
+    const { client } = mockClient({
+      item: { ...docx, name: "Deck.PPTX" },
+      contentResponse: new Response("", { status: 415 }),
+    });
+    await expect(
+      downloadFileTool.handler(client, { item_id: "01DOC", format: "pdf" }),
+    ).rejects.toThrow(
+      "Microsoft Graph could not convert 'Deck.PPTX' to PDF: HTTP 415. Source extension: '.pptx'.",
+    );
+  });
+
+  it("gives a Graph 400 notSupported the same conversion error, with no fallback", async () => {
+    const graphErr = new Response(
+      JSON.stringify({ error: { code: "notSupported", message: "Cannot convert this file" } }),
+      { status: 400 },
+    );
+    const { client } = mockClient({ item: docx, contentResponse: graphErr });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      downloadFileTool.handler(client, { item_id: "01DOC", format: "pdf" }),
+    ).rejects.toThrow(
+      "Microsoft Graph could not convert 'NDA.docx' to PDF: HTTP 400 (notSupported: Cannot convert this file). Source extension: '.docx'.",
+    );
+
+    // No silent fallback: the original's download URL is never fetched.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await readdir(path.join(sandboxBase, "tenant-t"))).toEqual([]);
+  });
+
+  it.each([
+    [
+      "another Graph code",
+      JSON.stringify({ error: { code: "invalidRequest", message: "Malformed request" } }),
+      "PDF conversion HTTP 400 (invalidRequest: Malformed request) for 'NDA.docx'",
+    ],
+    [
+      "'unsupported' in free text under another code",
+      JSON.stringify({ error: { code: "invalidRequest", message: "Unsupported query option" } }),
+      "PDF conversion HTTP 400 (invalidRequest: Unsupported query option) for 'NDA.docx'",
+    ],
+    [
+      "a non-JSON body that says notSupported",
+      "notSupported by this proxy",
+      "PDF conversion HTTP 400 (notSupported by this proxy) for 'NDA.docx'",
+    ],
+    ["an empty body", "", "PDF conversion HTTP 400 for 'NDA.docx'"],
+  ])("does not blame the source type for a 400 with %s", async (_label, body, expected) => {
+    const { client } = mockClient({
+      item: docx,
+      contentResponse: new Response(body, { status: 400 }),
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const failure = downloadFileTool.handler(client, { item_id: "01DOC", format: "pdf" });
+    await expect(failure).rejects.toThrow(expected);
+    await expect(failure).rejects.toThrow(
+      "(source extension '.docx'). This response does not establish that the source type is the cause.",
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await readdir(path.join(sandboxBase, "tenant-t"))).toEqual([]);
   });
 
   it("surfaces other Graph errors with status and code", async () => {

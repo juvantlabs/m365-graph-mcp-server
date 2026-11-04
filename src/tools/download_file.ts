@@ -49,6 +49,10 @@
  *     disabled for this request: we read `Location` ourselves, require
  *     https, and fetch it WITHOUT the bearer token (same trust model as
  *     `@microsoft.graph.downloadUrl`).
+ *   - A Graph refusal never falls back to the original bytes. 406, 415
+ *     and a `notSupported` code name the source extension as a conversion
+ *     failure. Any other 400 also names it, but does not claim the source
+ *     type is the cause, because the status alone cannot establish that.
  *   - The converted size is not known in advance, so the 200 MB cap is
  *     also enforced on the stream (Content-Length when present, plus a
  *     byte counter). A capped or failed conversion leaves no partial
@@ -204,12 +208,12 @@ export function fileExtension(name: string): string | null {
 
 /**
  * Throw a caller-actionable error when Graph cannot convert this source
- * type to the requested format.
+ * type to the requested format. Returns the validated source extension.
  */
-export function checkConvertible(name: string, format: DownloadFormat): void {
+export function checkConvertible(name: string, format: DownloadFormat): string {
   const ext = fileExtension(name);
   const supported = CONVERTIBLE_EXTENSIONS[format];
-  if (ext !== null && supported.has(ext)) return;
+  if (ext !== null && supported.has(ext)) return ext;
 
   const list = [...supported].join(", ");
   if (ext === format) {
@@ -266,21 +270,33 @@ export function cappedCounter(limit: number): { stream: Transform; bytes: () => 
   return { stream, bytes: () => seen };
 }
 
-async function readErrorSummary(raw: Response): Promise<string> {
+async function readErrorSummary(raw: Response): Promise<{ code: string; detail: string }> {
   let text = "";
   try {
     text = (await raw.text()).slice(0, MAX_ERROR_BODY_CHARS);
   } catch {
-    return "";
+    return { code: "", detail: "" };
   }
   try {
     const parsed = JSON.parse(text) as { error?: { code?: unknown; message?: unknown } };
     const code = typeof parsed.error?.code === "string" ? parsed.error.code : "";
     const message = typeof parsed.error?.message === "string" ? parsed.error.message : "";
-    return [code, message].filter(Boolean).join(": ");
+    return { code, detail: [code, message].filter(Boolean).join(": ") };
   } catch {
-    return text.trim().slice(0, 300);
+    return { code: "", detail: text.trim().slice(0, 300) };
   }
+}
+
+/**
+ * Whether a failed conversion response is Graph refusing the conversion
+ * itself. A 400 counts only on Graph's structured `notSupported` code:
+ * the status alone covers any malformed request, and free text such as
+ * "Unsupported query option" says nothing about the source file.
+ */
+function isConversionRefusal(status: number, code: string, detail: string): boolean {
+  if (status === 406 || status === 415) return true;
+  if (status === 400) return code.toLowerCase() === "notsupported";
+  return /notSupported|unsupported/i.test(detail);
 }
 
 /**
@@ -292,6 +308,7 @@ async function fetchConverted(
   graph: Client,
   contentPath: string,
   name: string,
+  sourceExtension: string,
   format: DownloadFormat,
 ): Promise<Response> {
   const raw = (await graph
@@ -319,11 +336,16 @@ async function fetchConverted(
 
   if (raw.status === 200) return raw;
 
-  const detail = await readErrorSummary(raw);
+  const { code, detail } = await readErrorSummary(raw);
   const suffix = detail ? ` (${detail})` : "";
-  if (raw.status === 406 || raw.status === 415 || /notSupported|unsupported/i.test(detail)) {
+  if (isConversionRefusal(raw.status, code, detail)) {
     throw new Error(
-      `Microsoft Graph could not convert '${name}' to ${format.toUpperCase()}: HTTP ${raw.status}${suffix}. The file may be encrypted, corrupt, or of a type Graph cannot convert.`,
+      `Microsoft Graph could not convert '${name}' to ${format.toUpperCase()}: HTTP ${raw.status}${suffix}. Source extension: '.${sourceExtension}'. The file may be encrypted, corrupt, or of a type Graph cannot convert.`,
+    );
+  }
+  if (raw.status === 400) {
+    throw new Error(
+      `PDF conversion HTTP 400${suffix} for '${name}' (source extension '.${sourceExtension}'). This response does not establish that the source type is the cause.`,
     );
   }
   throw new Error(`PDF conversion HTTP ${raw.status}${suffix}`);
@@ -380,7 +402,7 @@ const handler: ToolHandler = async (
     (item.file as Record<string, unknown> | undefined)?.mimeType ?? null;
 
   if (format !== undefined) {
-    checkConvertible(itemName, format);
+    const sourceExtension = checkConvertible(itemName, format);
 
     const tenantId = process.env.M365_TENANT_ID ?? "unknown";
     const sandboxRoot = getSandboxRoot(tenantId);
@@ -395,6 +417,7 @@ const handler: ToolHandler = async (
       graph,
       buildConvertedContentPath(driveRoot, itemId, format),
       itemName,
+      sourceExtension,
       format,
     );
     const written = await writeCapped(response, localPath);
