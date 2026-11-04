@@ -140,9 +140,14 @@ const handler: ToolHandler = async (
     ? `/me/calendars/${encodeURIComponent(calendarId)}/calendarView`
     : "/me/calendarView";
 
+  // The SDK joins query values raw. Encode them here, or the '+' of a
+  // positive UTC offset reaches Graph as a space.
   const response = await graph
     .api(apiBase)
-    .query({ startDateTime: start, endDateTime: end })
+    .query({
+      startDateTime: encodeURIComponent(start),
+      endDateTime: encodeURIComponent(end),
+    })
     .select("id,subject,bodyPreview,start,end,isAllDay,isOnlineMeeting,location,organizer,attendees,webLink")
     .top(limit)
     .orderby("start/dateTime")
