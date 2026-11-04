@@ -66,9 +66,11 @@ const handler: ToolHandler = async (
   // OData literal-string escape: ' → ''
   const escapedQuery = query.replace(/'/g, "''");
 
+  // The SDK stores $filter raw. Encode the literal here, or '+', '&' and
+  // '#' in the search term corrupt or split the query string.
   const response = await graph
     .api("/me/events")
-    .filter(`contains(subject, '${escapedQuery}')`)
+    .filter(`contains(subject, '${encodeURIComponent(escapedQuery)}')`)
     .top(limit)
     .get();
 

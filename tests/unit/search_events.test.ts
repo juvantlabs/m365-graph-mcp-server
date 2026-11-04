@@ -2,6 +2,7 @@ import type { Client } from "@microsoft/microsoft-graph-client";
 import { describe, expect, it, vi } from "vitest";
 
 import { searchEventsTool } from "../../src/tools/search_events.js";
+import { wireClient } from "../fixtures/graph_wire.js";
 
 function captureFilter(returnValue: unknown): { filters: string[]; client: Client } {
   const filters: string[] = [];
@@ -51,5 +52,30 @@ describe("searchEventsTool handler", () => {
     const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
     expect(parsed.query).toBe("review");
     expect(parsed.count).toBe(2);
+  });
+});
+
+describe("searchEventsTool query-string encoding (real SDK serialization)", () => {
+  it.each([
+    ["plain", "weekly review", "weekly review"],
+    ["plus", "C++ review", "C++ review"],
+    ["ampersand", "R&D sync", "R&D sync"],
+    ["hash", "Q3 #1", "Q3 #1"],
+    ["percent", "50% done", "50% done"],
+    ["single quote", "O'Brien", "O''Brien"],
+    ["non-ASCII", "caffè", "caffè"],
+    ["datetime with offset", "2026-11-04T00:00:00+01:00", "2026-11-04T00:00:00+01:00"],
+  ])("delivers a %s subject term to Graph unchanged", async (_label, query, literal) => {
+    const { client, sent } = wireClient();
+    await searchEventsTool.handler(client, { query });
+    expect(sent[0].searchParams.get("$filter")).toBe(`contains(subject, '${literal}')`);
+  });
+
+  it("cannot add or truncate query parameters through the search term", async () => {
+    const { client, sent } = wireClient();
+    await searchEventsTool.handler(client, { query: "x')&$top=999&y=#z" });
+    expect([...sent[0].searchParams.keys()]).toEqual(["$filter", "$top"]);
+    expect(sent[0].searchParams.get("$top")).toBe("20");
+    expect(sent[0].hash).toBe("");
   });
 });

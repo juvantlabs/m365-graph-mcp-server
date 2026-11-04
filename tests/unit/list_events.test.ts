@@ -2,6 +2,7 @@ import type { Client } from "@microsoft/microsoft-graph-client";
 import { describe, expect, it, vi } from "vitest";
 
 import { listEventsTool, summarizeEvent } from "../../src/tools/list_events.js";
+import { wireClient } from "../fixtures/graph_wire.js";
 
 describe("summarizeEvent", () => {
   it("extracts the canonical event fields", () => {
@@ -121,5 +122,40 @@ describe("listEventsTool handler", () => {
     const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
     expect(parsed.count).toBe(2);
     expect(parsed.window).toEqual({ start: "2026-05-04", end: "2026-05-05" });
+  });
+});
+
+describe("listEventsTool query-string encoding (real SDK serialization)", () => {
+  it.each([
+    ["positive offset", "2026-11-04T00:00:00+01:00", "2026-11-05T00:00:00+01:00"],
+    ["positive offset with minutes", "2026-11-04T00:00:00+05:30", "2026-11-05T00:00:00+05:30"],
+    ["fractional seconds", "2026-11-04T00:00:00.500+01:00", "2026-11-05T00:00:00.500+01:00"],
+    ["negative offset", "2026-11-04T00:00:00-05:00", "2026-11-05T00:00:00-05:00"],
+    ["UTC", "2026-11-04T00:00:00Z", "2026-11-05T00:00:00Z"],
+    ["date only", "2026-11-04", "2026-11-05"],
+  ])("delivers a %s window to Graph unchanged", async (_label, start, end) => {
+    const { client, sent } = wireClient();
+    await listEventsTool.handler(client, { start, end });
+    expect(sent[0].searchParams.get("startDateTime")).toBe(start);
+    expect(sent[0].searchParams.get("endDateTime")).toBe(end);
+  });
+
+  it("sends the + of an offset percent-encoded, not as a literal +", async () => {
+    const { client, sent } = wireClient();
+    await listEventsTool.handler(client, {
+      start: "2026-11-04T00:00:00+01:00",
+      end: "2026-11-05T00:00:00+01:00",
+    });
+    expect(sent[0].search).toContain("startDateTime=2026-11-04T00%3A00%3A00%2B01%3A00");
+    expect(sent[0].search).not.toContain("+");
+  });
+
+  it("echoes the caller's values in `window`, not the encoded form", async () => {
+    const start = "2026-11-04T00:00:00+01:00";
+    const end = "2026-11-05T00:00:00+01:00";
+    const { client } = wireClient();
+    const resp = await listEventsTool.handler(client, { start, end });
+    const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
+    expect(parsed.window).toEqual({ start, end });
   });
 });
