@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   sanitizeFilename,
+  validateHttpsUrl,
   validateOptionalInteger,
+  validateOptionalStrictEnum,
   validateOptionalString,
   validateRequiredISODate,
   validateRequiredString,
@@ -173,5 +175,42 @@ describe("validateRequiredISODate", () => {
     expect(() => validateRequiredISODate(undefined, "f")).toThrow(
       "'f' must be a non-empty string",
     );
+  });
+});
+
+describe("validateOptionalStrictEnum", () => {
+  const allowed = ["pdf"] as const;
+
+  it("returns undefined for undefined / null (no default)", () => {
+    expect(validateOptionalStrictEnum(undefined, "format", allowed)).toBeUndefined();
+    expect(validateOptionalStrictEnum(null, "format", allowed)).toBeUndefined();
+  });
+
+  it("returns an allowed value unchanged", () => {
+    expect(validateOptionalStrictEnum("pdf", "format", allowed)).toBe("pdf");
+  });
+
+  it("is case-sensitive and rejects non-strings and near-misses", () => {
+    for (const bad of ["PDF", "pdf ", "", 0, false, {}, ["pdf"]]) {
+      expect(() => validateOptionalStrictEnum(bad, "format", allowed)).toThrow(
+        "'format' must be one of [\"pdf\"]",
+      );
+    }
+  });
+});
+
+describe("validateHttpsUrl", () => {
+  it("returns the normalized https URL", () => {
+    expect(validateHttpsUrl("https://example.com/a?b=1", "target")).toBe(
+      "https://example.com/a?b=1",
+    );
+  });
+
+  it("rejects missing, relative and non-https values", () => {
+    expect(() => validateHttpsUrl(undefined, "target")).toThrow("target is missing");
+    expect(() => validateHttpsUrl("", "target")).toThrow("target is missing");
+    expect(() => validateHttpsUrl("/x", "target")).toThrow("target is not an absolute URL");
+    expect(() => validateHttpsUrl("http://example.com", "target")).toThrow("must be https");
+    expect(() => validateHttpsUrl("javascript:alert(1)", "target")).toThrow("must be https");
   });
 });

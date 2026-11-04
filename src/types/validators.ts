@@ -64,6 +64,46 @@ export function validateOptionalEnum<T extends string>(
 }
 
 /**
+ * Optional strict enum with no default: absent/null → undefined;
+ * anything else must be one of `allowed` exactly (case-sensitive).
+ * Used where "unset" has its own meaning (e.g. download_file `format`
+ * absent = original bytes), so a default value would be wrong.
+ */
+export function validateOptionalStrictEnum<T extends string>(
+  value: unknown,
+  fieldName: string,
+  allowed: ReadonlyArray<T>,
+): T | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || !(allowed as ReadonlyArray<string>).includes(value)) {
+    throw new Error(
+      `'${fieldName}' must be one of ${JSON.stringify(allowed)}; got ${JSON.stringify(value)}`,
+    );
+  }
+  return value as T;
+}
+
+/**
+ * Require an absolute https URL (e.g. a server-issued redirect target
+ * that will be fetched). Returns the normalized URL string.
+ */
+export function validateHttpsUrl(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`${label} is missing`);
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} is not an absolute URL`);
+  }
+  if (url.protocol !== "https:") {
+    throw new Error(`${label} must be https; refusing non-https target (${url.protocol})`);
+  }
+  return url.toString();
+}
+
+/**
  * Lightweight ISO 8601 date/datetime check. Accepts:
  *   - YYYY-MM-DD
  *   - YYYY-MM-DDTHH:MM
