@@ -11,6 +11,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed — Calendar
+
+- **`m365-graph:list_events`: positive UTC offsets no longer fail.**
+  `start` / `end` such as `2026-11-04T00:00:00+01:00` were rejected by
+  Graph (`The value '2026-11-04T00:00:00 01:00' of parameter
+  'StartDateTime' is invalid`). The Graph SDK does not URL-encode query
+  values, so the `+` was sent literally and decoded as a space. Values
+  are now percent-encoded; `window` in the result still echoes the
+  caller's input ([#18](https://github.com/juvantlabs/m365-graph-mcp-server/issues/18)).
+- **`m365-graph:search_events`: search terms containing `+`, `&` or `#`
+  are now matched as written.** Same cause: `+` searched for a space,
+  `&` split `$filter` into a stray query parameter, and `#` cut off the
+  rest of the query string ([#18](https://github.com/juvantlabs/m365-graph-mcp-server/issues/18)).
+
 ## [0.4.3] - unreleased — publish-workflow fix; first npm release of the 0.4.2 content
 
 Ships everything listed under `[0.4.2]` below (that version was tagged
