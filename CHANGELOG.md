@@ -38,10 +38,10 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     The 200 MB cap applies to the source pre-flight and is re-enforced
     on the converted stream; a capped or failed transfer leaves no
     partial file.
-  - Additive output fields when converting: `format`,
+  - The output always includes `format`: `"pdf"` when converted, `null`
+    for a plain download. Additive output fields when converting:
     `source_size_bytes`, `source_content_type`; `content_type` is
     `application/pdf` and `size_bytes` is the size of the PDF on disk.
-    Output without `format` is unchanged.
   - No new Graph scope.
 - **Validators**: `validateOptionalStrictEnum` (optional enum with no
   default) and `validateHttpsUrl` in `src/types/validators.ts`.

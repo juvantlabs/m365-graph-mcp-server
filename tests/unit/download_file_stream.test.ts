@@ -67,7 +67,17 @@ describe("downloadFileTool handler — plain streaming download", () => {
       size_bytes: 5,
       name: "report.xlsx",
       content_type: "application/vnd.ms-excel",
+      format: null,
     });
+  });
+
+  it("reports format: null when the caller passes format: null", async () => {
+    const { client } = clientReturning(fileItem);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("hello", { status: 200 })));
+    const res = await downloadFileTool.handler(client, { item_id: "01FILE", format: null });
+    const out = JSON.parse((res.content[0] as { text: string }).text);
+    expect(out).toHaveProperty("format", null);
+    expect(out.content_type).toBe("application/vnd.ms-excel");
   });
 
   it("defaults to /me/drive and null drive_id when no drive_id is given", async () => {

@@ -449,6 +449,7 @@ const handler: ToolHandler = async (
     size_bytes: size,
     name: itemName,
     content_type: sourceContentType,
+    format: null,
   };
 
   return {
