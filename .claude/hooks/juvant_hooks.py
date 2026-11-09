@@ -227,12 +227,12 @@ def cmd_limits():
         for rule in cfg["bash"]["ask"]:
             if rule["re"].search(command):
                 ask(f"juvant-os hard limit ({rule['id']}): {rule['why']}.")
-        who = shared_with()
-        if who:
-            why = shared_repo_violation(command, who)
-            if why:
-                deny(f"juvant-os hard limit (shared-repo): {why}. Writing where people outside the company read "
-                     "is outbound: work on a branch, open a draft PR (gh pr create --draft), and the CEO merges.")
+        decision, why = shared_repo_check(command, str(ev.get("cwd") or ROOT))
+        if decision == "deny":
+            deny(f"juvant-os hard limit (shared-repo): {why}. Writing where people outside the company read "
+                 "is outbound: work on a branch, open a draft PR (gh pr create --draft), and the CEO merges.")
+        elif decision == "ask":
+            ask(f"juvant-os hard limit (shared-repo): {why}.")
         if PRIVATE_REGISTRY in command and re.search(r"(>|\btee\b|\bsed\b|\bmv\b|\bcp\b|\brm\b|\bpython3?\b)", command):
             ask(f"juvant-os: {PRIVATE_REGISTRY} decides who can read private files. The CEO confirms every change.")
         why = framework_upstream_publish(command, str(ev.get("cwd") or ROOT))
@@ -386,18 +386,30 @@ def private_violation(tool, inp, who):
 
 
 # ── repositories shared outside the company ──────────────────────────────────
-def shared_with():
+def repo_root(path):
+    """The git checkout containing path (nearest .git upwards), or None."""
+    p = os.path.abspath(path or ROOT)
+    while True:
+        if os.path.exists(os.path.join(p, ".git")):
+            return p
+        parent = os.path.dirname(p)
+        if parent == p:
+            return None
+        p = parent
+
+
+def shared_with(root=None):
+    """Who outside the company reads the checkout at root (its .claude/juvant-os-project.json); "" if internal."""
     try:
-        with open(os.path.join(ROOT, ".claude", "juvant-os-project.json"), encoding="utf-8") as f:
+        with open(os.path.join(root or ROOT, ".claude", "juvant-os-project.json"), encoding="utf-8") as f:
             return str(json.load(f).get("shared_with") or "").strip()
     except (OSError, ValueError, AttributeError):
         return ""
 
 
-def current_branch():
+def current_branch(root=None):
     try:
-        import subprocess
-        out = subprocess.run(["git", "-C", ROOT, "symbolic-ref", "--short", "-q", "HEAD"],
+        out = subprocess.run(["git", "-C", root or ROOT, "symbolic-ref", "--short", "-q", "HEAD"],
                              capture_output=True, text=True, timeout=5)
         return out.stdout.strip()
     except Exception:  # noqa: BLE001
@@ -407,27 +419,110 @@ def current_branch():
 DEFAULT_BRANCHES = {"main", "master", "trunk", "develop"}
 
 
-def shared_repo_violation(command, who):
-    """Reason string if the command publishes to a shared repo's default branch,
-    merges a PR, or opens a non-draft PR; else None."""
+def default_branches(root):
+    names = set(DEFAULT_BRANCHES)
+    try:
+        out = subprocess.run(["git", "-C", root, "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+        if out:
+            names.add(out.split("/", 1)[-1])
+    except Exception:  # noqa: BLE001
+        pass
+    return names
+
+
+def git_subcommand(words, here):
+    """(index of git's subcommand, directory it acts on), parsing git's global options."""
+    i = 1
+    while i < len(words) and words[i].startswith("-"):
+        w = words[i]
+        if w == "-C" and i + 1 < len(words):
+            here = os.path.normpath(os.path.join(here, os.path.expanduser(words[i + 1])))
+            i += 2
+        elif w in ("--git-dir", "--work-tree") and i + 1 < len(words):
+            here = os.path.normpath(os.path.join(here, os.path.expanduser(words[i + 1])))
+            i += 2
+        elif w.startswith(("--git-dir=", "--work-tree=")):
+            here = os.path.normpath(os.path.join(here, os.path.expanduser(w.split("=", 1)[1])))
+            i += 1
+        elif w in ("-c", "--namespace", "--config-env") and i + 1 < len(words):
+            i += 2
+        else:
+            i += 1
+    return i, here
+
+
+def gh_repo_arg(words):
+    for i, w in enumerate(words):
+        if w in ("-R", "--repo") and i + 1 < len(words):
+            return words[i + 1]
+        if w.startswith("--repo="):
+            return w.split("=", 1)[1]
+    return ""
+
+
+def origin_matches(root, named):
+    """True if the checkout's origin is the GitHub repo named owner/repo (or a URL to it)."""
+    try:
+        url = subprocess.run(["git", "-C", root, "remote", "get-url", "origin"], capture_output=True,
+                             text=True, timeout=5).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return False
+    norm = lambda u: re.sub(r"(\.git)?/?$", "", re.sub(r"^.*github\.com[/:]", "", u.strip())).lower()  # noqa: E731
+    return bool(url) and norm(url) == norm(named)
+
+
+def shared_repo_check(command, cwd):
+    """(decision, reason) for a command that publishes to a shared repository's default
+    branch, merges a PR there, or opens a non-draft PR there; (None, None) otherwise.
+    Each segment is resolved to the checkout it acts on: the event's cwd, a preceding
+    `cd`, `git -C` / `--git-dir` / `--work-tree`, or a `gh -R` that matches that checkout."""
+    if "git" not in command and "gh" not in command:
+        return None, None
     segments = shell_segments(command)
     if segments is None:
-        return None
+        return None, None
+    here = cwd or ROOT
     for words in segments:
-        if len(words) >= 2 and os.path.basename(words[0]) == "git" and "push" in words[1:3]:
-            i = words.index("push")
-            args = [w for w in words[i + 1:] if not w.startswith("-")]
-            targets = [a.split(":")[-1].replace("refs/heads/", "").lstrip("+") for a in args[1:]]
-            if any(t in DEFAULT_BRANCHES or t == "HEAD" and current_branch() in DEFAULT_BRANCHES for t in targets):
-                return f"pushing to the default branch of a repository shared with {who}"
-            if not targets and current_branch() in DEFAULT_BRANCHES:
-                return f"pushing the default branch of a repository shared with {who}"
-        if len(words) >= 3 and os.path.basename(words[0]) == "gh" and words[1] == "pr":
+        if not words:
+            continue
+        verb = os.path.basename(words[0])
+        if verb == "cd" and len(words) > 1:
+            here = os.path.normpath(os.path.join(here, os.path.expanduser(words[1])))
+            continue
+        if verb == "git":
+            i, target = git_subcommand(words, here)
+            if i >= len(words) or words[i] != "push":
+                continue
+            root = repo_root(target)
+            who = shared_with(root) if root else ""
+            if not who:
+                continue
+            args = words[i + 1:]
+            if any(a in ("--all", "--mirror") for a in args):
+                return "deny", f"pushing every branch of a repository shared with {who}"
+            dests = [a.split(":")[-1].replace("refs/heads/", "").lstrip("+") for a in [a for a in args if not a.startswith("-")][1:]]
+            defaults, branch = default_branches(root), current_branch(root)
+            if any(d in defaults or (d == "HEAD" and branch in defaults) for d in dests):
+                return "deny", f"pushing to the default branch of a repository shared with {who}"
+            if not dests and branch in defaults:
+                return "deny", f"pushing the default branch of a repository shared with {who}"
+        elif verb == "gh" and len(words) >= 3 and words[1] == "pr" and words[2] in ("merge", "create"):
+            named = gh_repo_arg(words)
+            root = repo_root(here)
+            if named and not (root and origin_matches(root, named)):
+                if words[2] == "merge" or ("--draft" not in words and "-d" not in words):
+                    return "ask", (f"`gh pr {words[2]}` on {named}, which isn't checked out here, so whether people "
+                                   "outside the company read it can't be checked. The CEO confirms")
+                continue
+            who = shared_with(root) if root else ""
+            if not who:
+                continue
             if words[2] == "merge":
-                return f"merging a pull request in a repository shared with {who}"
-            if words[2] == "create" and "--draft" not in words and "-d" not in words:
-                return f"opening a non-draft pull request in a repository shared with {who}"
-    return None
+                return "deny", f"merging a pull request in a repository shared with {who}"
+            if "--draft" not in words and "-d" not in words:
+                return "deny", f"opening a non-draft pull request in a repository shared with {who}"
+    return None, None
 
 
 UPSTREAM_RE = re.compile(r"(github\.com[/:]|^|\s)[\w.-]+/juvant-os(\.git)?/?(\s|$)")
@@ -529,6 +624,35 @@ def frontmatter(text):
     return out
 
 
+def waiting_for_ceo():
+    """(day, ["- Waiting for the CEO: …", …]) from the latest journal; (None, []) if none."""
+    jdir = os.path.join(ROOT, "memory", "journal")
+    try:
+        days = sorted((n for n in os.listdir(jdir) if re.match(r"\d{4}-\d{2}-\d{2}\.md$", n)), reverse=True)
+    except OSError:
+        return None, []
+    if not days:
+        return None, []
+    text = read_text(os.path.join("memory", "journal", days[0])) or ""
+    return days[0], [l.strip() for l in text.splitlines() if re.match(r"^\s*-\s*Waiting for the CEO", l, re.I)]
+
+
+WAITING_SHOW_CAP = 1200
+
+
+def waiting_banner():
+    """What the CEO sees on screen at session start: the agent can't speak first."""
+    day, waiting = waiting_for_ceo()
+    items = [re.sub(r"^\s*-\s*Waiting for the CEO\s*:?\s*", "", l, flags=re.I) for l in waiting]
+    items = [i for i in items if i and not re.match(r"^(see|nothing|none)\b", i, re.I)]
+    if not items:
+        return ""
+    text = f"Waiting for you (memory/journal/{day}):\n" + "\n".join("• " + i for i in items)
+    if len(text) > WAITING_SHOW_CAP:
+        text = text[:WAITING_SHOW_CAP].rsplit(" ", 1)[0] + " …"
+    return text + "\nAsk the Chief of Staff to go through them."
+
+
 def memory_digest():
     """Short memory context for the main session: map, recent active decisions,
     and what the latest journal says is waiting for the CEO."""
@@ -578,16 +702,9 @@ def memory_digest():
             break
     if prow:
         parts.append("## Projects\n\n" + "\n".join(prow))
-    jdir = os.path.join(ROOT, "memory", "journal")
-    try:
-        days = sorted((n for n in os.listdir(jdir) if re.match(r"\d{4}-\d{2}-\d{2}\.md$", n)), reverse=True)
-    except OSError:
-        days = []
-    if days:
-        text = read_text(os.path.join("memory", "journal", days[0])) or ""
-        waiting = [l.strip() for l in text.splitlines() if re.match(r"^\s*-\s*Waiting for the CEO", l, re.I)]
-        if waiting:
-            parts.append(f"## Waiting for the CEO (memory/journal/{days[0]})\n\n" + "\n".join(waiting))
+    day, waiting = waiting_for_ceo()
+    if waiting:
+        parts.append(f"## Waiting for the CEO (memory/journal/{day})\n\n" + "\n".join(waiting))
     if not parts:
         return ""
     text = "# Company memory digest\n\nFrom the files in memory/. Search memory/ for anything else; if a fact isn't there, say it isn't recorded.\n\n" + "\n\n".join(parts)
@@ -686,6 +803,10 @@ def cmd_session_start():
     except OSError:
         pass
     prefixes.discard("")
+    try:  # a prefix added to known_prefixes since it was logged no longer needs the CEO
+        prefixes -= set(load_config()["known_prefixes"])
+    except (OSError, ValueError, KeyError, TypeError, re.error):
+        pass
     sharing = github_sharing_note()
     if sharing:
         lines.append(sharing)
@@ -697,7 +818,15 @@ def cmd_session_start():
         lines.append("Tell the CEO: limited tools were called under MCP prefixes the permission rules don't list ("
                      + ", ".join(sorted(prefixes)) + "). The hook blocked them; add the prefixes to "
                      "`known_prefixes` and to the permission denies in .claude/settings.json.")
-    emit({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n".join(lines)}})
+    out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "\n".join(lines)}}
+    if not ROLE_ID.match(agent) and ev.get("source") in ("startup", "resume", "clear", None):
+        banner = waiting_banner()
+        if banner:
+            out["systemMessage"] = banner
+            lines.append("The CEO already sees the 'Waiting for the CEO' list on screen. When they first write, "
+                         "start from it: what's still open, and what you recommend doing first.")
+            out["hookSpecificOutput"]["additionalContext"] = "\n".join(lines)
+    emit(out)
 
 
 def cmd_subagent_stop():
