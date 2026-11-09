@@ -1,0 +1,31 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css"></head>
+<body style="padding:22px;">
+  <div style="display:flex; align-items:center; gap:28px;">
+    <div>
+      <!-- Live-rendered wordmarks in DejaVu Sans Condensed Bold (local /fonts/).
+           Proves the font loads; compare against the logo PNGs. -->
+      <div style="font-family: var(--font-wordmark); font-weight: 700; font-size: 56px;
+                  letter-spacing: 2px; line-height: 1;
+                  background: var(--juv-grad); -webkit-background-clip: text; background-clip: text; color: transparent;">
+        JUVANT
+      </div>
+      <div style="font-family: var(--font-wordmark); font-weight: 700; font-size: 44px;
+                  letter-spacing: 2px; line-height: 1; margin-top: 10px;
+                  background: var(--juv-grad); -webkit-background-clip: text; background-clip: text; color: transparent;">
+        HARDYS
+      </div>
+    </div>
+    <div style="flex:1; min-width:0; border-left: 1px solid var(--juv-hairline-dk); padding-left: 22px;">
+      <div class="label" style="color:#A855F7;">BRAND WORDMARK</div>
+      <div style="font-family: var(--font-sans); font-size: 13px; color: var(--fg); line-height:1.55; margin-top: 10px;">
+        <strong>DejaVu Sans Condensed Bold</strong> · 2px tracking · ALL CAPS · violet→cyan gradient fill
+      </div>
+      <div style="font-family: var(--font-sans); font-size: 11px; color: var(--fg-2); line-height:1.6; margin-top:8px;">
+        Loaded locally from
+        <span class="mono" style="color:var(--juv-cyan);">fonts/DejaVuSansCondensed-Bold.ttf</span>.
+        In production SVGs the font is base64-embedded; in HTML surfaces use the
+        <span class="mono" style="color:var(--juv-cyan);">.juv-wordmark</span> utility.
+      </div>
+    </div>
+  </div>
+</body></html>

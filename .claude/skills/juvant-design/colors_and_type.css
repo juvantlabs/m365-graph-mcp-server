@@ -1,0 +1,300 @@
+/* ============================================================
+   Juvant Design System — Tokens
+   Colors, type, spacing, radii, shadows.
+   Import into any HTML surface to inherit brand foundations.
+   ============================================================ */
+
+/* Webfonts — Google Fonts, nearest match to brand stack.
+   Brand stack: DejaVu Sans Condensed Bold (wordmarks, embedded in SVG),
+   Georgia (serif slide titles, print quotes), Arial (slide body),
+   DM Serif Display + DM Sans + JetBrains Mono (web & digital). */
+@font-face {
+  font-family: 'DejaVu Sans Condensed';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('fonts/DejaVuSansCondensed-Bold.ttf') format('truetype');
+}
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+:root {
+  /* ---------- Primary ---------- */
+  --juv-void:        #080B14; /* primary dark bg */
+  --juv-violet:      #A855F7; /* primary accent, left end of gradient */
+  --juv-cyan:        #22D3EE; /* secondary accent, right end of gradient */
+
+  /* ---------- Secondary ---------- */
+  --juv-violet-mid:  #7C3AED; /* hover / filled */
+  --juv-offwhite:    #E8EEFA; /* body text on dark */
+  --juv-slate:       #94A3B8; /* secondary text, captions */
+  --juv-dark-card:   #161D2C; /* card bg on dark */
+  --juv-light-bg:    #F4F6FB; /* page bg on light */
+  --juv-ink:         #0D1117; /* body text on light */
+  --juv-ink-2:       #1f2937; /* secondary text on light */
+  --juv-muted:       #6b7280; /* captions on light */
+  --juv-hairline:    rgba(168,85,247,0.14); /* faint violet separator */
+  --juv-hairline-dk: rgba(232,238,250,0.08); /* on dark */
+
+  /* ---------- Semantic surfaces ---------- */
+  --bg:              var(--juv-void);
+  --bg-elevated:     var(--juv-dark-card);
+  --fg:              var(--juv-offwhite);
+  --fg-2:            var(--juv-slate);
+  --accent:          var(--juv-violet);
+  --accent-2:        var(--juv-cyan);
+  --link-on-dark:    var(--juv-cyan);
+  --link-on-light:   var(--juv-violet);
+
+  /* ---------- Gradient — the brand signature ----------
+     Always violet (left/top-left) → cyan (right/bottom-right).
+     Never reversed, never vertical on text. */
+  --juv-grad:        linear-gradient(90deg, #A855F7 0%, #22D3EE 100%);
+  --juv-grad-diag:   linear-gradient(135deg, #A855F7 0%, #22D3EE 100%);
+  --juv-grad-soft:   linear-gradient(90deg, rgba(168,85,247,0.18), rgba(34,211,238,0.18));
+  --juv-grad-hairline: linear-gradient(90deg, rgba(168,85,247,0.4), rgba(34,211,238,0.4));
+
+  /* ---------- Typography — font stacks ---------- */
+  --font-wordmark:   'DejaVu Sans Condensed', 'Arial Narrow', Impact, sans-serif;
+  --font-display:    'DM Serif Display', Georgia, 'Times New Roman', serif;
+  --font-serif:      Georgia, 'DM Serif Display', 'Times New Roman', serif;
+  --font-sans:       'DM Sans', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-ui:         Arial, Helvetica, sans-serif; /* for presentations/docs per brand spec */
+  --font-mono:       'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---------- Type scale (web) ---------- */
+  --fs-hero:         clamp(48px, 7vw, 88px);
+  --fs-h1:           clamp(36px, 4.5vw, 56px);
+  --fs-h2:           clamp(28px, 3vw, 40px);
+  --fs-h3:           22px;
+  --fs-h4:           18px;
+  --fs-body:         16px;
+  --fs-body-sm:      14px;
+  --fs-caption:      12px;
+  --fs-eyebrow:      11px;
+
+  --lh-tight:        1.1;
+  --lh-snug:         1.25;
+  --lh-normal:       1.5;
+  --lh-relaxed:      1.75;
+
+  --ls-wordmark:     2px;
+  --ls-eyebrow:      0.3em;    /* ALL CAPS section labels, letter-spacing 4 in pt = ~0.3em */
+  --ls-caps-tight:   0.08em;
+
+  /* ---------- Spacing ---------- */
+  --s-1:  4px;
+  --s-2:  8px;
+  --s-3:  12px;
+  --s-4:  16px;
+  --s-5:  20px;
+  --s-6:  24px;
+  --s-8:  32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+  --s-20: 80px;
+  --s-24: 96px;
+  --s-32: 128px;
+
+  /* ---------- Radii ---------- */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 20px;
+  --r-pill: 999px;
+
+  /* ---------- Shadows ---------- */
+  --sh-1: 0 1px 2px rgba(8,11,20,0.25);
+  --sh-2: 0 4px 12px rgba(8,11,20,0.18);
+  --sh-3: 0 12px 32px rgba(8,11,20,0.28);
+  --sh-glow-violet: 0 0 24px rgba(168,85,247,0.45);
+  --sh-glow-cyan:   0 0 24px rgba(34,211,238,0.45);
+  --sh-glow-brand:  0 0 32px rgba(124,58,237,0.35), 0 0 48px rgba(34,211,238,0.22);
+
+  /* ---------- Glow filter (signature effect) ---------- */
+  --juv-blur-soft: 1.5;
+  --juv-blur-med:  2.0;
+  --juv-blur-strong: 2.5;
+
+  /* ---------- Motion ---------- */
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:     160ms;
+  --dur-med:      280ms;
+  --dur-slow:     480ms;
+}
+
+/* ============================================================
+   Base / semantic type roles
+   ============================================================ */
+.juv-body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.juv-body--light {
+  color: var(--juv-ink);
+  background: var(--juv-light-bg);
+}
+
+.juv-wordmark {
+  font-family: var(--font-wordmark);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-wordmark);
+  background: var(--juv-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.juv-eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-eyebrow);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.juv-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+
+.juv-h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+  font-weight: 400;
+}
+.juv-h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  letter-spacing: -0.005em;
+  font-weight: 400;
+}
+.juv-h3 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+}
+.juv-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-snug);
+  font-weight: 600;
+}
+.juv-p {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--fg);
+}
+.juv-caption {
+  font-family: var(--font-sans);
+  font-size: var(--fs-caption);
+  color: var(--fg-2);
+  letter-spacing: 0.02em;
+}
+.juv-quote {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 1.25em;
+  line-height: var(--lh-snug);
+  color: var(--fg);
+}
+.juv-mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Gradient text utility — applies the brand gradient to any text. */
+.juv-gradient-text {
+  background: var(--juv-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.juv-btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 12px 24px;
+  border-radius: var(--r-md);
+  border: 0;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out),
+              filter var(--dur-fast) var(--ease-out);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.juv-btn--primary {
+  background: var(--juv-grad);
+  color: #ffffff;
+}
+.juv-btn--primary:hover { filter: brightness(1.08); box-shadow: var(--sh-glow-brand); }
+.juv-btn--primary:active { transform: translateY(1px); filter: brightness(0.98); }
+
+.juv-btn--outline {
+  background: transparent;
+  color: var(--fg);
+  position: relative;
+  padding: 11px 23px;
+  border: 1px solid transparent;
+  background-image:
+    linear-gradient(var(--bg), var(--bg)),
+    var(--juv-grad);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.juv-btn--outline:hover { filter: brightness(1.1); }
+
+.juv-btn--ghost {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--juv-hairline-dk);
+}
+.juv-btn--ghost:hover { background: rgba(232,238,250,0.04); }
+
+/* ============================================================
+   Cards
+   ============================================================ */
+.juv-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--juv-hairline-dk);
+  border-radius: var(--r-lg);
+  padding: var(--s-6);
+}
+.juv-card--light {
+  background: #ffffff;
+  border: 1px solid rgba(13,17,23,0.06);
+  box-shadow: var(--sh-1);
+}
+
+/* Hairline gradient separator — brand signature */
+.juv-separator-grad {
+  height: 1px;
+  background: var(--juv-grad-hairline);
+  border: 0;
+}

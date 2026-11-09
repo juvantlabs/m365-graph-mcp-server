@@ -1,0 +1,57 @@
+/* Shared styling for all preview cards.
+   Each card is ~700×150–400px, minimal framing — the card title
+   renders OUTSIDE the card in the Design System tab, so we skip
+   titles here and show the specimen directly. */
+
+@import url('../colors_and_type.css');
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  background: var(--bg);
+  width: 700px;
+  min-height: 120px;
+  padding: 20px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.light {
+  background: #ffffff;
+  color: var(--juv-ink);
+}
+
+.row { display: flex; gap: 12px; align-items: stretch; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.grow { flex: 1; }
+.muted { color: var(--fg-2); }
+.muted-light { color: var(--juv-muted); }
+
+.mono { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0; }
+.label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.label-light { color: var(--juv-muted); }
+
+/* Reusable swatch */
+.swatch {
+  border-radius: var(--r-sm);
+  padding: 14px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 11px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+.swatch .name { font-weight: 600; font-size: 12px; }
+.swatch .hex  { font-family: var(--font-mono); font-size: 10px; opacity: 0.8; letter-spacing: 0; }
+.swatch.dark-text { color: #080B14; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
+.swatch.light-text { color: #E8EEFA; }
