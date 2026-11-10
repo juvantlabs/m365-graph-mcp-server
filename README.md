@@ -133,12 +133,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 }
 ```
 
-Pinning the version in `mcp_server` keeps installs reproducible. The
-canonical inventory entry, with the same pin, is at
-[`juvant-os/docs/MCP_INVENTORY.md`](https://github.com/juvantlabs/juvant-os/blob/main/docs/MCP_INVENTORY.md)
-— refer to it for the matrix-side bindings (which agents have
-`m365-graph:rw` granted by default in the v0 seed) and the wizard
-Step 8.5 cross-check semantics.
+Pinning the version in `mcp_server` keeps installs reproducible.
 
 ## Tools
 
