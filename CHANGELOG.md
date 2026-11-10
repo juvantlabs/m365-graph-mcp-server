@@ -11,6 +11,40 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — SharePoint document libraries: `list_sites` + `list_drives(site_id)`
+
+### Added — Files
+
+- **`m365-graph:list_sites`** (read): finds the SharePoint sites the
+  user can access via `GET /sites?search=` (default `*`), returning id,
+  name, display name and URL. Results are security-trimmed by
+  SharePoint.
+- **`m365-graph:list_drives` — optional `site_id`**: returns the
+  document libraries of that site (`GET /sites/{site-id}/drives`).
+  `site_id` must match the Graph shape `{hostname},{guid},{guid}`.
+
+### Fixed — Files
+
+- **SharePoint libraries were not discoverable.** `list_drives`
+  promised "shared SharePoint document libraries", but Microsoft
+  Graph's `/me/drives` returns only the user's OneDrive drives in
+  business tenants. The description now states what each mode returns,
+  and the no-argument response carries a `note` pointing to
+  `list_sites`. The no-argument output shape is otherwise unchanged.
+
+### Scopes
+
+- **No new scope and no Entra change.** Site discovery and site drives
+  need `Sites.Read.All`, covered by the `Sites.ReadWrite.All` scope the
+  server already requests. No re-run of `setup` is needed.
+
+### Tests
+
+- `list_sites` unit tests (query as parameter, limit cap, validation);
+  `list_drives` `site_id` mode (path, malformed IDs rejected before any
+  Graph call); `upload_file` into a SharePoint library folder by
+  `drive_id` (`b!…`) + `parent_item_id` with conflict `fail`.
+
 ## [0.6.0] — public-client auth: no client secret
 
 The server runs on the user's machine with delegated permissions, so it
