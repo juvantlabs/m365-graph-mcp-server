@@ -17,32 +17,97 @@ vi.mock("@napi-rs/keyring", () => ({
   Entry: entryConstructor,
 }));
 
-import { DELEGATED_SCOPES, REDIRECT_URI, getAccessToken, makeMsalClient } from "../../src/auth/msal.js";
+import { PublicClientApplication } from "@azure/msal-node";
+
+import {
+  DELEGATED_SCOPES,
+  deviceCodeRequest,
+  getAccessToken,
+  interactiveRequest,
+  makeMsalClient,
+} from "../../src/auth/msal.js";
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
 describe("makeMsalClient", () => {
-  it("constructs a ConfidentialClientApplication with env-derived config", () => {
+  it("constructs a PublicClientApplication from M365_* env vars, with no secret", () => {
     const original = { ...process.env };
     process.env.M365_TENANT_ID = "c557607d-995c-4eb7-967b-50c6361fbad9";
     process.env.M365_CLIENT_ID = "00000000-0000-0000-0000-000000000001";
-    process.env.M365_CLIENT_SECRET = "test-secret";
+    delete process.env.M365_CLIENT_SECRET;
     try {
       const client = makeMsalClient();
-      expect(client).toBeDefined();
+      expect(client).toBeInstanceOf(PublicClientApplication);
       expect(typeof client.acquireTokenSilent).toBe("function");
-      expect(typeof client.getAuthCodeUrl).toBe("function");
+      expect(typeof client.acquireTokenInteractive).toBe("function");
+      expect(typeof client.acquireTokenByDeviceCode).toBe("function");
+    } finally {
+      process.env = original;
+    }
+  });
+
+  it("does not read a leftover M365_CLIENT_SECRET", () => {
+    const original = { ...process.env };
+    process.env.M365_TENANT_ID = "c557607d-995c-4eb7-967b-50c6361fbad9";
+    process.env.M365_CLIENT_ID = "00000000-0000-0000-0000-000000000001";
+    process.env.M365_CLIENT_SECRET = "leftover";
+    try {
+      const client = makeMsalClient();
+      expect(client).toBeInstanceOf(PublicClientApplication);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const auth = (client as any).config.auth as Record<string, unknown>;
+      expect(auth.clientSecret ?? "").toBe("");
     } finally {
       process.env = original;
     }
   });
 });
 
-describe("REDIRECT_URI", () => {
-  it("matches the localhost callback registered in the Entra app", () => {
-    expect(REDIRECT_URI).toBe("http://localhost:3000/auth/callback");
+describe("interactiveRequest", () => {
+  it("requests DELEGATED_SCOPES with account selection and no fixed redirect URI", () => {
+    const openBrowser = vi.fn();
+    const req = interactiveRequest(openBrowser);
+    expect(req.scopes).toEqual(DELEGATED_SCOPES);
+    expect(req.openBrowser).toBe(openBrowser);
+    expect(req.prompt).toBe("select_account");
+    // MSAL picks a free loopback port; a fixed redirect URI is rejected
+    // by PublicClientApplication.acquireTokenInteractive.
+    expect(req.redirectUri).toBeUndefined();
+    expect(req.nonce).toBeUndefined();
+    expect(req.successTemplate).toMatch(/Authentication successful/);
+  });
+});
+
+describe("deviceCodeRequest", () => {
+  it("requests DELEGATED_SCOPES and forwards the user message", () => {
+    const onMessage = vi.fn();
+    const req = deviceCodeRequest(onMessage);
+    expect(req.scopes).toEqual(DELEGATED_SCOPES);
+    req.deviceCodeCallback({
+      message: "To sign in, use a web browser to open the page and enter the code ABC.",
+      userCode: "ABC",
+      deviceCode: "dc",
+      verificationUri: "https://microsoft.com/devicelogin",
+      expiresIn: 900,
+      interval: 5,
+    });
+    expect(onMessage).toHaveBeenCalledWith(expect.stringContaining("ABC"));
+  });
+
+  it("falls back to URI + code when the message is missing, and stays silent when both are", () => {
+    const onMessage = vi.fn();
+    const req = deviceCodeRequest(onMessage);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    req.deviceCodeCallback({ userCode: "XYZ", verificationUri: "https://microsoft.com/devicelogin" } as any);
+    expect(onMessage).toHaveBeenCalledWith(
+      "Open https://microsoft.com/devicelogin and enter the code XYZ.",
+    );
+    onMessage.mockClear();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    req.deviceCodeCallback({} as any);
+    expect(onMessage).not.toHaveBeenCalled();
   });
 });
 
@@ -127,6 +192,18 @@ describe("getAccessToken", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getAccessToken(msal as any),
     ).rejects.toThrow(/Silent token acquisition/);
+  });
+
+  it("wraps a silent-acquisition failure with the re-run-setup hint", async () => {
+    const msal = makeMsalMock({
+      accounts: [{ username: "alice@x.com" }],
+      silentResult: null,
+      silentThrows: new Error("invalid_grant: AADSTS7000218"),
+    });
+    await expect(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getAccessToken(msal as any),
+    ).rejects.toThrow(/Silent token acquisition failed: invalid_grant: AADSTS7000218\. Re-run .*setup/);
   });
 
   it("requests the configured DELEGATED_SCOPES", async () => {

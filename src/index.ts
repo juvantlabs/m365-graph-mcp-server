@@ -26,7 +26,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { makeMsalClient } from "./auth/msal.js";
-import { runSetup } from "./auth/setup.js";
+import { parseSetupArgs, runSetup } from "./auth/setup.js";
 import { makeGraphClient } from "./client/graph.js";
 import { ALL_TOOLS, buildHandlerMap } from "./tools/index.js";
 
@@ -72,7 +72,6 @@ export const PACKAGE_VERSION = readPackageVersion();
 export function checkEnv(env: NodeJS.ProcessEnv = process.env): void {
   const missing: string[] = [];
   if (!env.M365_CLIENT_ID) missing.push("M365_CLIENT_ID");
-  if (!env.M365_CLIENT_SECRET) missing.push("M365_CLIENT_SECRET");
   if (!env.M365_TENANT_ID) missing.push("M365_TENANT_ID");
   if (missing.length > 0) {
     throw new Error(
@@ -85,6 +84,24 @@ export function checkEnv(env: NodeJS.ProcessEnv = process.env): void {
         `Expected: 'common' | 'organizations' | 'consumers' | <UUID>.`,
     );
   }
+}
+
+/**
+ * Warnings for environment variables that are still set but no longer
+ * used. Since v0.6.0 the server is a public client: a leftover
+ * `M365_CLIENT_SECRET` is ignored (never read, never sent).
+ * Returned as one-line strings; main() prints them on stderr.
+ */
+export function deprecationWarnings(env: NodeJS.ProcessEnv = process.env): string[] {
+  const warnings: string[] = [];
+  if (env.M365_CLIENT_SECRET) {
+    warnings.push(
+      "M365_CLIENT_SECRET is set but ignored: since v0.6.0 the server is a public " +
+        "client and uses no secret. Remove it from your configuration and delete the " +
+        "secret from the Entra app registration.",
+    );
+  }
+  return warnings;
 }
 
 /**
@@ -156,12 +173,12 @@ async function runMcpServer(): Promise<void> {
  * actually spawning the server.
  */
 export async function dispatch(argv: string[], handlers: {
-  setup: () => Promise<void>;
+  setup: (args: string[]) => Promise<void>;
   serve: () => Promise<void>;
 }): Promise<void> {
   const subcommand = argv[2];
   if (subcommand === "setup") {
-    await handlers.setup();
+    await handlers.setup(argv.slice(3));
     return;
   }
   await handlers.serve();
@@ -175,9 +192,22 @@ async function main(): Promise<void> {
     console.error(`[m365-graph-mcp-server] ${message}`);
     process.exit(1);
   }
+  for (const warning of deprecationWarnings()) {
+    console.error(`[m365-graph-mcp-server] warning: ${warning}`);
+  }
 
   await dispatch(process.argv, {
-    setup: runSetup,
+    setup: async (args) => {
+      let options;
+      try {
+        options = parseSetupArgs(args);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[m365-graph-mcp-server] ${message}`);
+        process.exit(1);
+      }
+      await runSetup(options);
+    },
     serve: runMcpServer,
   });
 }

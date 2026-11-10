@@ -46,6 +46,15 @@ back-port security fixes to the `N-1` major.
 - Issues in adopter customizations / forks of this server.
 - Theoretical vulnerabilities without a reproduction path.
 
+## Credentials and tokens
+
+Since v0.6.0 the server is an OAuth **public client**: no client secret
+or certificate exists, in the package, in its configuration or in the
+Entra app registration. Sign-in uses the authorization code flow with
+PKCE on a loopback redirect (or the device code flow); the only
+sensitive material on disk is the MSAL token cache, stored in the OS
+keychain. The tenant ID and client ID are identifiers, not secrets.
+
 ## Security-relevant dependencies
 
 | Dependency | Version | Why it matters |

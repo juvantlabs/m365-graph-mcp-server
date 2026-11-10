@@ -8,10 +8,13 @@
  * acquisition and refresh — is the shipped MSAL code.
  *
  * These pin the behaviours an msal-node upgrade can silently break:
- *   1. setup's authorization URL: response_mode=query (the localhost
- *      listener reads GET ?code=) and no nonce.
- *   2. setup's code exchange → keychain write → silent token on restart.
- *   3. msal-node ≥ 5.6 strict ID-token nonce validation (documented).
+ *   1. setup's interactive flow as a PUBLIC client: authorization URL
+ *      with a loopback redirect on a free port, PKCE S256,
+ *      response_mode=form_post and no nonce; code redemption with the
+ *      PKCE verifier and NO client secret.
+ *   2. setup → keychain write → silent token on restart.
+ *   3. msal-node ≥ 5.6 strict ID-token nonce validation.
+ *   3b. the device-code fallback redeems without a client secret.
  *   4. a keychain cache written by an OLDER msal-node (fixture generated
  *      with 5.1.5, see tests/fixtures/msal-legacy-cache/) still returns
  *      the cached token and refreshes with its refresh token.
@@ -46,9 +49,9 @@ vi.mock("@napi-rs/keyring", () => ({
 
 import {
   DELEGATED_SCOPES,
-  authCodeTokenRequest,
-  authCodeUrlRequest,
+  deviceCodeRequest,
   getAccessToken,
+  interactiveRequest,
   makeMsalClient,
 } from "../../src/auth/msal.js";
 
@@ -117,6 +120,20 @@ function fakeIdp(opts: { accessToken: string; idTokenClaims?: Record<string, unk
     },
     async sendPostRequestAsync(url: string, options?: NetworkRequestOptions) {
       posts.push({ url, body: new URLSearchParams(String(options?.body ?? "")) });
+      if (url.includes("/devicecode")) {
+        return {
+          status: 200,
+          headers: {},
+          body: {
+            user_code: "FAKE-CODE",
+            device_code: "fake-device-code",
+            verification_uri: "https://microsoft.com/devicelogin",
+            expires_in: 900,
+            interval: 1,
+            message: "To sign in, open https://microsoft.com/devicelogin and enter FAKE-CODE.",
+          },
+        } as never;
+      }
       return {
         status: 200,
         headers: {},
@@ -146,34 +163,65 @@ beforeEach(() => {
   keychain.clear();
   process.env.M365_TENANT_ID = TENANT;
   process.env.M365_CLIENT_ID = CLIENT_ID;
-  process.env.M365_CLIENT_SECRET = "test-secret";
+  delete process.env.M365_CLIENT_SECRET;
 });
 
 afterEach(() => {
   process.env = { ...originalEnv };
 });
 
-describe("setup authorization URL (real MSAL)", () => {
-  it("uses response_mode=query, sends no nonce, and carries the setup parameters", async () => {
-    const idp = fakeIdp({ accessToken: "unused" });
-    const url = new URL(await client(idp).getAuthCodeUrl(authCodeUrlRequest()));
+/**
+ * Play the browser + identity provider for acquireTokenInteractive: read
+ * the authorization URL MSAL built, then deliver an auth code to MSAL's
+ * loopback listener the way Entra does (form_post to the redirect URI).
+ */
+function fakeBrowser(code: string): { openBrowser: (url: string) => Promise<void>; urls: URL[] } {
+  const urls: URL[] = [];
+  return {
+    urls,
+    async openBrowser(raw: string): Promise<void> {
+      const url = new URL(raw);
+      urls.push(url);
+      const redirect = url.searchParams.get("redirect_uri") ?? "";
+      // MSAL listens on 127.0.0.1; "localhost" may resolve to ::1 first.
+      const target = redirect.replace("//localhost:", "//127.0.0.1:");
+      const res = await fetch(target, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ code, state: url.searchParams.get("state") ?? "" }),
+      });
+      await res.text();
+    },
+  };
+}
 
+describe("setup interactive flow: public client, loopback + PKCE (real MSAL)", () => {
+  it("builds the authorization URL with a free loopback port, PKCE S256, form_post and no nonce", async () => {
+    const idp = fakeIdp({ accessToken: "fresh-access-token" });
+    const browser = fakeBrowser("auth-code-123");
+    await client(idp).acquireTokenInteractive(interactiveRequest(browser.openBrowser));
+
+    expect(browser.urls).toHaveLength(1);
+    const url = browser.urls[0];
     expect(`${url.origin}${url.pathname}`).toBe(`https://${HOST}/${TENANT}/oauth2/v2.0/authorize`);
-    expect(url.searchParams.get("response_mode")).toBe("query");
-    expect(url.searchParams.has("nonce")).toBe(false);
-    expect(url.searchParams.get("redirect_uri")).toBe("http://localhost:3000/auth/callback");
-    expect(url.searchParams.get("prompt")).toBe("select_account");
     expect(url.searchParams.get("client_id")).toBe(CLIENT_ID);
+    expect(url.searchParams.get("redirect_uri")).toMatch(/^http:\/\/localhost:\d+$/);
+    expect(url.searchParams.get("redirect_uri")).not.toBe("http://localhost:3000");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(url.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(url.searchParams.get("response_mode")).toBe("form_post");
+    expect(url.searchParams.has("nonce")).toBe(false);
+    expect(url.searchParams.get("prompt")).toBe("select_account");
     const scopes = (url.searchParams.get("scope") ?? "").split(" ");
     for (const s of DELEGATED_SCOPES) expect(scopes).toContain(s);
-    expect(idp.posts).toHaveLength(0);
   });
-});
 
-describe("setup code exchange → keychain → silent token (real MSAL)", () => {
-  it("persists the cache to the keychain and serves the token silently after a restart", async () => {
+  it("redeems the code with the PKCE verifier and no client secret, then serves the token silently after a restart", async () => {
     const idp = fakeIdp({ accessToken: "fresh-access-token" });
-    const result = await client(idp).acquireTokenByCode(authCodeTokenRequest("auth-code-123"));
+    const browser = fakeBrowser("auth-code-123");
+    const result = await client(idp).acquireTokenInteractive(
+      interactiveRequest(browser.openBrowser),
+    );
 
     expect(result.account?.username).toBe("user@example.test");
     expect(idp.posts).toHaveLength(1);
@@ -181,9 +229,13 @@ describe("setup code exchange → keychain → silent token (real MSAL)", () => 
     expect(`${tokenUrl.origin}${tokenUrl.pathname}`).toBe(
       `https://${HOST}/${TENANT}/oauth2/v2.0/token`,
     );
-    expect(idp.posts[0].body.get("grant_type")).toBe("authorization_code");
-    expect(idp.posts[0].body.get("code")).toBe("auth-code-123");
-    expect(idp.posts[0].body.get("redirect_uri")).toBe("http://localhost:3000/auth/callback");
+    const body = idp.posts[0].body;
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("auth-code-123");
+    expect(body.get("redirect_uri")).toBe(browser.urls[0].searchParams.get("redirect_uri"));
+    expect(body.get("code_verifier")).toMatch(/^[A-Za-z0-9_-]{43,128}$/);
+    expect(body.has("client_secret")).toBe(false);
+    expect(body.has("client_assertion")).toBe(false);
     expect(keychain.has(KEYCHAIN_KEY)).toBe(true);
 
     // New client instance = server restart reading the keychain.
@@ -192,17 +244,76 @@ describe("setup code exchange → keychain → silent token (real MSAL)", () => 
     expect(restarted.posts).toHaveLength(0);
   });
 
+  it("ignores a leftover M365_CLIENT_SECRET: nothing secret reaches the token endpoint", async () => {
+    process.env.M365_CLIENT_SECRET = "leftover-secret";
+    const idp = fakeIdp({ accessToken: "fresh-access-token" });
+    await client(idp).acquireTokenInteractive(
+      interactiveRequest(fakeBrowser("auth-code-123").openBrowser),
+    );
+    expect(idp.posts).toHaveLength(1);
+    expect(idp.posts[0].body.has("client_secret")).toBe(false);
+    expect(idp.posts[0].body.toString()).not.toContain("leftover-secret");
+  });
+
   it("rejects an ID token carrying a nonce the request never sent (strict nonce validation)", async () => {
     const idp = fakeIdp({ accessToken: "x", idTokenClaims: { nonce: "unexpected" } });
     await expect(
-      client(idp).acquireTokenByCode(authCodeTokenRequest("auth-code-123")),
+      client(idp).acquireTokenInteractive(
+        interactiveRequest(fakeBrowser("auth-code-123").openBrowser),
+      ),
     ).rejects.toMatchObject({ errorCode: "nonce_mismatch" });
     expect(keychain.has(KEYCHAIN_KEY)).toBe(false);
   });
 
+  it("surfaces an error returned to the loopback redirect and caches nothing", async () => {
+    const idp = fakeIdp({ accessToken: "x" });
+    const openBrowser = async (raw: string): Promise<void> => {
+      const redirect = (new URL(raw).searchParams.get("redirect_uri") ?? "").replace(
+        "//localhost:",
+        "//127.0.0.1:",
+      );
+      await (
+        await fetch(redirect, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ error: "access_denied", error_description: "user cancelled" }),
+        })
+      ).text();
+    };
+    await expect(
+      client(idp).acquireTokenInteractive(interactiveRequest(openBrowser)),
+    ).rejects.toMatchObject({ errorCode: "access_denied" });
+    expect(idp.posts).toHaveLength(0);
+    expect(keychain.has(KEYCHAIN_KEY)).toBe(false);
+  });
+});
+
+describe("setup --device-code (real MSAL)", () => {
+  it("shows the user message, redeems the device code without a client secret, and caches the token", async () => {
+    const idp = fakeIdp({ accessToken: "device-access-token" });
+    const messages: string[] = [];
+    const result = await client(idp).acquireTokenByDeviceCode(
+      deviceCodeRequest((m) => messages.push(m)),
+    );
+
+    expect(result?.account?.username).toBe("user@example.test");
+    expect(messages).toEqual([expect.stringContaining("FAKE-CODE")]);
+    expect(idp.posts.map((p) => new URL(p.url).pathname)).toEqual([
+      `/${TENANT}/oauth2/v2.0/devicecode`,
+      `/${TENANT}/oauth2/v2.0/token`,
+    ]);
+    const token = idp.posts[1].body;
+    expect(token.get("grant_type")).toBe("device_code");
+    expect(token.get("device_code")).toBe("fake-device-code");
+    expect(token.has("client_secret")).toBe(false);
+    expect(keychain.has(KEYCHAIN_KEY)).toBe(true);
+  });
+});
+
+describe("silent acquisition (real MSAL)", () => {
   it("throws the setup hint when the keychain holds no account", async () => {
     await expect(getAccessToken(client(fakeIdp({ accessToken: "x" })))).rejects.toThrow(
-      "Run `npm run setup`",
+      "@juvantlabs/m365-graph-mcp-server setup",
     );
   });
 });
@@ -253,6 +364,8 @@ describe("keychain cache written by an older msal-node (fixture: 5.1.5)", () => 
     expect(idp.posts).toHaveLength(1);
     expect(idp.posts[0].body.get("grant_type")).toBe("refresh_token");
     expect(idp.posts[0].body.get("refresh_token")).toBe("legacy-refresh-token");
+    // Public client: the refresh is redeemed without a client secret.
+    expect(idp.posts[0].body.has("client_secret")).toBe(false);
     // The refreshed cache is written back to the keychain.
     expect(keychain.get(KEYCHAIN_KEY)).toContain("refreshed-access-token");
   });

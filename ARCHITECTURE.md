@@ -79,15 +79,31 @@ instead.
 
 ## Authentication
 
-OAuth 2.0 via `@azure/msal-node`'s `ConfidentialClientApplication`,
-scoped per the application registration in Microsoft Entra (tenant
-admin grants delegated and/or application permissions to the
-registered app).
+OAuth 2.0 via `@azure/msal-node`'s `PublicClientApplication` (since
+v0.6.0), with delegated permissions granted to the application
+registration in Microsoft Entra. The server runs on the user's machine,
+so it is a **public client**: no client secret or certificate exists in
+the package, its configuration or the app registration; a leftover
+`M365_CLIENT_SECRET` is ignored with a one-line stderr warning. Required
+configuration is the tenant ID and client ID, read from the process
+environment only.
+
+- **Setup** (`m365-graph-mcp-server setup`, works from the published
+  package via `npx`): authorization code + PKCE (S256) via MSAL's
+  `acquireTokenInteractive`. MSAL listens on a free port of
+  `127.0.0.1`, the redirect is `http://localhost:<port>` (Entra
+  "Mobile and desktop applications" platform, redirect
+  `http://localhost`, any port), the code arrives by `form_post` and is
+  redeemed with the PKCE verifier. No nonce is sent.
+- **`setup --device-code`**: device code flow for headless machines;
+  requires "Allow public client flows" on the app.
+- **Runtime**: silent acquisition from the keychain cache; MSAL
+  refreshes with the cached refresh token.
 
 | Concern | Choice |
 |---|---|
 | OAuth library | `@azure/msal-node` (Microsoft's official) — never roll auth |
-| Flow | Authorization Code with PKCE for delegated; Client Credentials for daemon ops |
+| Flow | Public client: Authorization Code with PKCE on a loopback redirect (default) or device code (`setup --device-code`); delegated permissions only, no client secret |
 | Scopes | Per-tool minimum: `Files.Read.All` for read-only file tools, `Files.ReadWrite.All` for write tools, `Calendars.Read` / `Calendars.ReadWrite` for calendar tools, `OnlineMeetings.Read` + `OnlineMeetingTranscript.Read.All` (both **admin consent required**) for transcript tools. Documented in [`README.md`](README.md) § Tools. |
 | Token storage | `@napi-rs/keyring` (OS keychain). `keytar` is archived (handbook spec anti-pattern #10) — explicitly NOT used. |
 | Token lifetime | Refresh token rotation handled by MSAL; refreshes never enter the agent's context. |
@@ -104,8 +120,8 @@ This server is a **self-hosted single-tenant** MCP server. Each adopter:
 
 1. Registers their own Entra (Azure AD) application **inside their own tenant**.
 2. Configures the application as **single-tenant** (`Accounts in this organizational directory only`) at registration time.
-3. Generates a client secret (or, post-MVP, a federated credential).
-4. Provides `M365_CLIENT_ID` + `M365_CLIENT_SECRET` + `M365_TENANT_ID` to the server at runtime via env vars (sourced from `.env.local` for local dev, from Azure Key Vault + Managed Identity for cloud deploys).
+3. Adds the **Mobile and desktop applications** platform with redirect `http://localhost` (public client: no client secret or certificate).
+4. Provides `M365_CLIENT_ID` + `M365_TENANT_ID` to the server at runtime via env vars (typically in the MCP client configuration; `.env.local` is a local-development convenience only).
 
 The npm package (`@juvantlabs/m365-graph-mcp-server`) is **code only**. No
 central provider tenant exists. No customer onboarding flow. No cross-tenant
@@ -337,7 +353,7 @@ security smell (handbook anti-pattern S1).
 |---|---|---|
 | `@modelcontextprotocol/sdk` | `^1.32.2` | MCP framing; ≥1.25.2 required (ReDoS + DNS rebinding fixes — audit C7); ≥1.32 clears the late-2026 `npm audit` advisories on the SDK and its transitive HTTP stack. |
 | `@microsoft/microsoft-graph-client` | `^3.0.7` | Microsoft's official Graph SDK — handles batching, retries, types |
-| `@azure/msal-node` | `^7.1.2` | OAuth — never roll auth. v5+ avoids transitive `uuid <14` GHSA-w5hq-g745-h8pq; v7.1.2 clears the high-severity advisory affecting 5.0.0-beta.0 – 7.0.2. The v6/v7 majors only change `PublicClientApplication.acquireTokenInteractive` (unused here); the confidential-client auth-code flow, `getAuthCodeUrl` defaults and the token-cache format are unchanged — pinned by `tests/unit/msal_contract.test.ts`, including a cache fixture written by 5.1.5. |
+| `@azure/msal-node` | `^7.1.2` | OAuth — never roll auth. v5+ avoids transitive `uuid <14` GHSA-w5hq-g745-h8pq; v7.1.2 clears the high-severity advisory affecting 5.0.0-beta.0 – 7.0.2. Since v0.6.0 the server uses `PublicClientApplication.acquireTokenInteractive` (loopback + PKCE, `form_post`) and `acquireTokenByDeviceCode`; both flows, the absence of any client secret on the wire and the token-cache format are pinned by `tests/unit/msal_contract.test.ts`, including a cache fixture written by 5.1.5. |
 | `@napi-rs/keyring` | `^1.3.0` | OS keychain for token persistence; replaces archived `keytar`. |
 | `isomorphic-fetch` | `^3.0.0` | Peer dep of the Graph SDK. |
 

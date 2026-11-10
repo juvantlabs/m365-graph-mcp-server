@@ -1,12 +1,12 @@
 /**
  * Integration tests for transcript tools.
  *
- * Runs against the real Microsoft Graph API using the credentials in
- * `.env.local` (M365_TENANT_ID, M365_CLIENT_ID, M365_CLIENT_SECRET)
- * and the token cached in the OS keychain via `npm run setup`.
+ * Runs against the real Microsoft Graph API using the app identifiers
+ * in the environment (M365_TENANT_ID, M365_CLIENT_ID; e.g. from
+ * `.env.local`) and the token cached in the OS keychain by `setup`.
  *
- * Skipped automatically when credentials are not available so the
- * test suite can run in CI without secrets configured.
+ * Skipped automatically when the identifiers are not set so the
+ * test suite can run in CI without a tenant.
  *
  * Run manually:
  *   npm run test:integration
@@ -20,10 +20,7 @@ import { listMeetingTranscriptsTool } from "../../src/tools/list_meeting_transcr
 import { getTranscriptTool } from "../../src/tools/get_transcript.js";
 import { listEventsTool } from "../../src/tools/list_events.js";
 
-const hasCredentials =
-  !!process.env.M365_TENANT_ID &&
-  !!process.env.M365_CLIENT_ID &&
-  !!process.env.M365_CLIENT_SECRET;
+const hasCredentials = !!process.env.M365_TENANT_ID && !!process.env.M365_CLIENT_ID;
 
 const describeIf = hasCredentials ? describe : describe.skip;
 
