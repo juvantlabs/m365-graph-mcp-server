@@ -1,131 +1,112 @@
 /**
- * Interactive OAuth setup — run once via `npm run setup` (or
- * `m365-graph-mcp-server setup`) to populate the OS keychain with the
- * initial token cache. After this, `npm run dev` (or `npx ...`) uses
- * the cached refresh token silently for the lifetime of the refresh
- * grant (Microsoft default ~90 days; rolling).
+ * One-time sign-in: `npx -y @juvantlabs/m365-graph-mcp-server setup`
+ * (or `npm run setup` in a checkout). Populates the OS keychain with the
+ * initial MSAL token cache; afterwards the MCP server uses the cached
+ * refresh token silently for the lifetime of the refresh grant
+ * (Microsoft default ~90 days, rolling).
  *
- * Flow:
- *   1. Build the authorization URL via MSAL.
- *   2. Open the user's default browser at that URL.
- *   3. Listen on http://localhost:3000/auth/callback for the
- *      ?code=... redirect.
- *   4. Exchange the code for tokens (MSAL writes to the cache plugin
- *      → keychain).
- *   5. Close the localhost listener and exit.
+ * Reads only process environment variables (`M365_TENANT_ID`,
+ * `M365_CLIENT_ID`); no file in the current directory is needed.
+ *
+ * Flows (public client, no secret):
+ *   - default: interactive authorization code + PKCE. MSAL Node opens a
+ *     one-shot listener on a free 127.0.0.1 port, we open the browser at
+ *     the authorization URL, MSAL redeems the code with the PKCE
+ *     verifier and writes the cache (→ keychain).
+ *   - `--device-code`: device code flow for headless machines. The user
+ *     enters a code at https://microsoft.com/devicelogin on any device.
  */
 
-import { exec } from "node:child_process";
-import http from "node:http";
-import { URL } from "node:url";
+import { execFile } from "node:child_process";
 
-import {
-  REDIRECT_URI,
-  authCodeTokenRequest,
-  authCodeUrlRequest,
-  makeMsalClient,
-} from "./msal.js";
+import type { AuthenticationResult, PublicClientApplication } from "@azure/msal-node";
 
-const CALLBACK_PORT = 3000;
-const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+import { deviceCodeRequest, interactiveRequest, makeMsalClient } from "./msal.js";
 
-function openInBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin"
-      ? `open "${url}"`
-      : process.platform === "win32"
-        ? `start "" "${url}"`
-        : `xdg-open "${url}"`;
-  exec(cmd, (err) => {
+const PACKAGE_NAME = "@juvantlabs/m365-graph-mcp-server";
+
+export interface SetupOptions {
+  deviceCode: boolean;
+}
+
+/** Parse the arguments that follow `setup` on the command line. */
+export function parseSetupArgs(args: string[]): SetupOptions {
+  const unknown = args.filter((a) => a !== "--device-code");
+  if (unknown.length > 0) {
+    throw new Error(
+      `unknown setup option(s): ${unknown.join(" ")}. Usage: setup [--device-code]`,
+    );
+  }
+  return { deviceCode: args.includes("--device-code") };
+}
+
+/** The platform command that opens `url` in the default browser. */
+export function browserCommand(
+  url: string,
+  platform: NodeJS.Platform = process.platform,
+): { file: string; args: string[] } {
+  if (platform === "darwin") return { file: "open", args: [url] };
+  if (platform === "win32") {
+    return { file: "rundll32", args: ["url.dll,FileProtocolHandler", url] };
+  }
+  return { file: "xdg-open", args: [url] };
+}
+
+/**
+ * Print the authorization URL, then try to open it. The URL is passed as
+ * an argument (no shell), and a failure to open is not fatal: the user
+ * can paste the printed URL.
+ */
+export async function openInBrowser(url: string): Promise<void> {
+  console.error("[setup] If your browser does not open automatically, visit:");
+  console.error("");
+  console.error(`  ${url}`);
+  console.error("");
+  const { file, args } = browserCommand(url);
+  execFile(file, args, (err) => {
     if (err) {
       console.error(
-        "[setup] Could not open browser automatically. Visit the URL above manually.",
+        "[setup] Could not open a browser automatically. Visit the URL above, " +
+          "or re-run with --device-code on a machine without a browser.",
       );
     }
   });
 }
 
-function waitForAuthCode(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      server.close();
-      reject(new Error(`Timed out waiting for OAuth callback after ${CALLBACK_TIMEOUT_MS / 1000}s`));
-    }, CALLBACK_TIMEOUT_MS);
-
-    const server = http.createServer((req, res) => {
-      const requestUrl = new URL(req.url ?? "/", `http://localhost:${CALLBACK_PORT}`);
-      if (requestUrl.pathname !== "/auth/callback") {
-        res.writeHead(404, { "Content-Type": "text/plain" });
-        res.end("Not Found");
-        return;
-      }
-      const code = requestUrl.searchParams.get("code");
-      const error = requestUrl.searchParams.get("error");
-      const errorDescription = requestUrl.searchParams.get("error_description");
-
-      if (error) {
-        res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(
-          `<html><body><h2>OAuth error</h2><p><b>${error}</b></p>` +
-            `<pre>${errorDescription ?? ""}</pre></body></html>`,
-        );
-        clearTimeout(timer);
-        server.close();
-        reject(new Error(`${error}: ${errorDescription ?? "(no description)"}`));
-        return;
-      }
-
-      if (!code) {
-        res.writeHead(400, { "Content-Type": "text/plain" });
-        res.end("Missing authorization code in callback URL.");
-        return;
-      }
-
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-      res.end(
-        "<html><body><h2>Authentication successful</h2>" +
-          "<p>You can close this tab and return to the terminal.</p></body></html>",
-      );
-      clearTimeout(timer);
-      server.close();
-      resolve(code);
-    });
-
-    server.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-
-    server.listen(CALLBACK_PORT, "127.0.0.1");
-  });
+export interface SetupDeps {
+  client?: PublicClientApplication;
+  openBrowser?: (url: string) => Promise<void>;
 }
 
-export async function runSetup(): Promise<void> {
-  const client = makeMsalClient();
+export async function runSetup(
+  options: SetupOptions = { deviceCode: false },
+  deps: SetupDeps = {},
+): Promise<AuthenticationResult> {
+  const client = deps.client ?? makeMsalClient();
+  console.error(
+    `[setup] Signing in against tenant ${process.env.M365_TENANT_ID} ` +
+      `(${options.deviceCode ? "device code" : "browser, PKCE"} flow).`,
+  );
 
-  const authUrl = await client.getAuthCodeUrl(authCodeUrlRequest());
+  const result = options.deviceCode
+    ? await client.acquireTokenByDeviceCode(
+        deviceCodeRequest((message) => console.error(`[setup] ${message}`)),
+      )
+    : await client.acquireTokenInteractive(
+        interactiveRequest(deps.openBrowser ?? openInBrowser),
+      );
 
-  console.error("[setup] Starting OAuth flow against tenant:", process.env.M365_TENANT_ID);
-  console.error("[setup] If your browser does not open automatically, visit:");
-  console.error("");
-  console.error(`  ${authUrl}`);
-  console.error("");
-  console.error(`[setup] Listening for callback on ${REDIRECT_URI}`);
-  console.error("");
-
-  openInBrowser(authUrl);
-  const code = await waitForAuthCode();
-
-  console.error("[setup] Authorization code received. Exchanging for tokens…");
-  const tokenResponse = await client.acquireTokenByCode(authCodeTokenRequest(code));
-
-  if (!tokenResponse?.account) {
+  if (!result?.account) {
     throw new Error("Token acquisition succeeded but no account info was returned.");
   }
 
-  console.error("[setup] ✓ Tokens cached in OS keychain for:");
-  console.error(`        username: ${tokenResponse.account.username}`);
-  console.error(`        homeAccountId: ${tokenResponse.account.homeAccountId}`);
+  console.error("[setup] Tokens cached in the OS keychain for:");
+  console.error(`        username: ${result.account.username}`);
+  console.error(`        homeAccountId: ${result.account.homeAccountId}`);
   console.error("");
-  console.error("[setup] You can now run `npm run dev` (or `npx @juvantlabs/m365-graph-mcp-server`).");
+  console.error(
+    `[setup] Done. Register the server with your MCP client, e.g. ` +
+      `\`claude mcp add m365-graph -e M365_TENANT_ID=... -e M365_CLIENT_ID=... -- npx -y ${PACKAGE_NAME}\`.`,
+  );
+  return result;
 }

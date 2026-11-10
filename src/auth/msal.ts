@@ -1,21 +1,34 @@
 /**
  * MSAL Node client factory + cache plugin wiring.
  *
- * Uses ConfidentialClientApplication (we have a client_secret) with the
- * Authorization Code flow for delegated permissions. Per the handbook
- * spec § Auth, we never roll our own OAuth — MSAL Node is Microsoft's
- * official library and handles refresh, revocation, and edge cases.
+ * The server runs on the user's own machine with delegated permissions,
+ * so it is a PUBLIC client: `PublicClientApplication`, no client secret,
+ * no certificate. Nothing secret lives on disk except the MSAL token
+ * cache, which is kept in the OS keychain (`src/auth/keyring.ts`).
  *
- * Tokens persist in the OS keychain via `src/auth/keyring.ts`. The MSAL
- * cache plugin pattern is: load on first access, save when it changes.
+ * Initial sign-in (`setup`):
+ *   - default: interactive authorization code + PKCE on a loopback
+ *     redirect (`http://localhost:<random free port>`), handled by
+ *     MSAL Node's `acquireTokenInteractive`;
+ *   - fallback for headless machines: device code flow
+ *     (`setup --device-code`).
+ * Afterwards the server acquires tokens silently from the cached
+ * refresh token. We never roll our own OAuth: MSAL Node handles PKCE,
+ * refresh, revocation and edge cases.
+ *
+ * NOTE: this server intentionally uses its OWN app registration (env
+ * vars `M365_TENANT_ID`, `M365_CLIENT_ID`) distinct from the
+ * sibling `m365-mail-mcp-server`. Isolation is deliberate: a scope
+ * misconfiguration in one server MUST NOT reuse the other's app and
+ * silently escalate permissions.
  */
 
 import {
-  ConfidentialClientApplication,
-  type AuthorizationCodeRequest,
-  type AuthorizationUrlRequest,
+  PublicClientApplication,
   type Configuration,
+  type DeviceCodeRequest,
   type ICachePlugin,
+  type InteractiveRequest,
   type TokenCacheContext,
 } from "@azure/msal-node";
 
@@ -52,39 +65,52 @@ export const DELEGATED_SCOPES = [
   "offline_access",
 ];
 
-/**
- * The redirect URI registered in the Entra app for the OAuth callback.
- * Must exactly match one of the redirect URIs configured in the Entra
- * app registration. See README § Local development.
- */
-export const REDIRECT_URI = "http://localhost:3000/auth/callback";
+const SUCCESS_HTML =
+  "<html><body><h2>Authentication successful</h2>" +
+  "<p>You can close this tab and return to the terminal.</p></body></html>";
+const ERROR_HTML =
+  "<html><body><h2>Authentication failed</h2>" +
+  "<p>Return to the terminal for details.</p></body></html>";
 
 /**
- * Authorization-URL request used by `setup`. Deliberately no `nonce`
- * and no `responseMode`:
- *   - the confidential-client `getAuthCodeUrl` defaults to
- *     `response_mode=query`, which is what the setup localhost listener
- *     reads (GET `?code=`);
- *   - `acquireTokenByCode` (msal-node ≥ 5.6) validates the ID-token
- *     nonce strictly — if a nonce were sent here it would also have to be
- *     passed to the code exchange, otherwise the exchange fails with
- *     `nonce_mismatch`. Sending none keeps the two requests consistent.
+ * Interactive request used by `setup`. MSAL Node starts a one-shot
+ * loopback listener on a free port of 127.0.0.1, builds the
+ * authorization URL with redirect `http://localhost:<port>`, a PKCE
+ * S256 challenge and `response_mode=form_post`, calls `openBrowser`,
+ * then redeems the code with the PKCE verifier. No redirect URI is
+ * passed: Entra accepts any port on `http://localhost` for the
+ * "Mobile and desktop applications" platform. No nonce is sent, so the
+ * strict ID-token nonce check (msal-node >= 5.6) has nothing to compare.
  * Pinned by tests/unit/msal_contract.test.ts.
  */
-export function authCodeUrlRequest(): AuthorizationUrlRequest {
+export function interactiveRequest(
+  openBrowser: (url: string) => Promise<void>,
+): InteractiveRequest {
   return {
     scopes: DELEGATED_SCOPES,
-    redirectUri: REDIRECT_URI,
+    openBrowser,
     prompt: "select_account",
+    successTemplate: SUCCESS_HTML,
+    errorTemplate: ERROR_HTML,
   };
 }
 
-/** Code-exchange request used by `setup`; mirrors authCodeUrlRequest(). */
-export function authCodeTokenRequest(code: string): AuthorizationCodeRequest {
+/**
+ * Device-code request used by `setup --device-code`, for machines with
+ * no local browser. Requires "Allow public client flows" on the Entra
+ * app registration.
+ */
+export function deviceCodeRequest(onMessage: (message: string) => void): DeviceCodeRequest {
   return {
-    code,
     scopes: DELEGATED_SCOPES,
-    redirectUri: REDIRECT_URI,
+    deviceCodeCallback: (response) => {
+      const message =
+        response.message ||
+        (response.userCode
+          ? `Open ${response.verificationUri} and enter the code ${response.userCode}.`
+          : "");
+      if (message) onMessage(message);
+    },
   };
 }
 
@@ -114,7 +140,7 @@ export function makeCachePlugin(tenantId: string): ICachePlugin {
  * Optional, additive overrides. Production calls `makeMsalClient()` with
  * none; tests pass offline authority/cloud-discovery metadata and a fake
  * network module so the real MSAL code paths run without a tenant.
- * Credentials, authority and cache plugin are never overridable here.
+ * Client ID, authority and cache plugin are never overridable here.
  */
 export interface MsalClientOverrides {
   authorityMetadata?: string;
@@ -122,12 +148,11 @@ export interface MsalClientOverrides {
   system?: Configuration["system"];
 }
 
-export function makeMsalClient(overrides: MsalClientOverrides = {}): ConfidentialClientApplication {
+export function makeMsalClient(overrides: MsalClientOverrides = {}): PublicClientApplication {
   const tenantId = process.env.M365_TENANT_ID ?? "";
   const config: Configuration = {
     auth: {
       clientId: process.env.M365_CLIENT_ID ?? "",
-      clientSecret: process.env.M365_CLIENT_SECRET ?? "",
       authority: `https://login.microsoftonline.com/${tenantId}`,
       ...(overrides.authorityMetadata !== undefined
         ? { authorityMetadata: overrides.authorityMetadata }
@@ -141,34 +166,48 @@ export function makeMsalClient(overrides: MsalClientOverrides = {}): Confidentia
     },
     ...(overrides.system !== undefined ? { system: overrides.system } : {}),
   };
-  return new ConfidentialClientApplication(config);
+  return new PublicClientApplication(config);
 }
 
 /**
  * Acquire an access token silently from the cache. Refreshes via the
  * cached refresh token if the access token is expired. Throws if no
- * cached account exists — the caller should run `npm run setup` to
- * complete the initial OAuth flow.
+ * cached account exists: the user should run `setup` once to complete
+ * the initial sign-in.
  */
 export async function getAccessToken(
-  client: ConfidentialClientApplication,
+  client: PublicClientApplication,
 ): Promise<string> {
   const cache = client.getTokenCache();
   const accounts = await cache.getAllAccounts();
   if (accounts.length === 0) {
     throw new Error(
-      "No cached account found in the keychain. Run `npm run setup` (or " +
-        "`m365-graph-mcp-server setup`) once to complete the OAuth flow.",
+      "No cached account found in the keychain. Run `npx -y " +
+        "@juvantlabs/m365-graph-mcp-server setup` once (with the same " +
+        "M365_* environment variables) to sign in.",
     );
   }
-  const result = await client.acquireTokenSilent({
-    account: accounts[0],
-    scopes: DELEGATED_SCOPES,
-  });
+  let result;
+  try {
+    result = await client.acquireTokenSilent({
+      account: accounts[0],
+      scopes: DELEGATED_SCOPES,
+    });
+  } catch (err) {
+    // Typical causes: refresh token expired or revoked, consent changed,
+    // or a token cached by a pre-0.6.0 (client-secret) version that the
+    // public client cannot redeem. All are fixed by signing in again.
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Silent token acquisition failed: ${reason}. Re-run \`npx -y ` +
+        "@juvantlabs/m365-graph-mcp-server setup` to sign in again (required " +
+        "once after upgrading from a version older than 0.6.0).",
+    );
+  }
   if (!result?.accessToken) {
     throw new Error(
       "Silent token acquisition returned no access token. The refresh " +
-        "token may have been revoked or expired. Re-run `npm run setup`.",
+        "token may have been revoked or expired. Re-run `setup`.",
     );
   }
   return result.accessToken;

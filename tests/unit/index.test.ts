@@ -7,6 +7,7 @@ import {
   PACKAGE_VERSION,
   TENANT_ID_RE,
   checkEnv,
+  deprecationWarnings,
   dispatch,
   dispatchToolCall,
   readPackageVersion,
@@ -18,11 +19,10 @@ const pkgJson = require("../../package.json") as { version: string };
 describe("checkEnv", () => {
   const valid = {
     M365_CLIENT_ID: "00000000-0000-0000-0000-000000000001",
-    M365_CLIENT_SECRET: "secret-value",
     M365_TENANT_ID: "c557607d-995c-4eb7-967b-50c6361fbad9",
   };
 
-  it("passes with all 3 required vars + valid tenant UUID", () => {
+  it("passes with tenant ID + client ID only (public client, no secret)", () => {
     expect(() => checkEnv(valid)).not.toThrow();
   });
 
@@ -34,9 +34,18 @@ describe("checkEnv", () => {
   );
 
   it("throws with a list of missing vars", () => {
-    expect(() => checkEnv({ M365_TENANT_ID: valid.M365_TENANT_ID })).toThrow(
-      /M365_CLIENT_ID, M365_CLIENT_SECRET/,
-    );
+    expect(() => checkEnv({})).toThrow(/M365_CLIENT_ID, M365_TENANT_ID/);
+  });
+
+  it("never requires M365_CLIENT_SECRET", () => {
+    let message = "";
+    try {
+      checkEnv({ M365_TENANT_ID: valid.M365_TENANT_ID });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain("M365_CLIENT_ID");
+    expect(message).not.toContain("SECRET");
   });
 
   it("throws on invalid tenant ID shape", () => {
@@ -47,6 +56,28 @@ describe("checkEnv", () => {
 
   it("throws on empty string tenant ID (treated as missing)", () => {
     expect(() => checkEnv({ ...valid, M365_TENANT_ID: "" })).toThrow(/missing/);
+  });
+});
+
+describe("deprecationWarnings", () => {
+  it("is empty when no legacy variable is set", () => {
+    expect(deprecationWarnings({ M365_TENANT_ID: "common", M365_CLIENT_ID: "x" })).toEqual(
+      [],
+    );
+  });
+
+  it("warns, on one line, that a leftover M365_CLIENT_SECRET is ignored", () => {
+    const warnings = deprecationWarnings({ M365_CLIENT_SECRET: "leftover" });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("M365_CLIENT_SECRET");
+    expect(warnings[0]).toContain("ignored");
+    expect(warnings[0]).not.toContain("\n");
+    // The value itself is never echoed.
+    expect(warnings[0]).not.toContain("leftover");
+  });
+
+  it("ignores an empty M365_CLIENT_SECRET", () => {
+    expect(deprecationWarnings({ M365_CLIENT_SECRET: "" })).toEqual([]);
   });
 });
 
@@ -129,7 +160,15 @@ describe("dispatch", () => {
     const serve = vi.fn().mockResolvedValue(undefined);
     await dispatch(["node", "index.ts", "setup"], { setup, serve });
     expect(setup).toHaveBeenCalledTimes(1);
+    expect(setup).toHaveBeenCalledWith([]);
     expect(serve).not.toHaveBeenCalled();
+  });
+
+  it("passes the arguments after 'setup' to handlers.setup", async () => {
+    const setup = vi.fn().mockResolvedValue(undefined);
+    const serve = vi.fn().mockResolvedValue(undefined);
+    await dispatch(["node", "index.ts", "setup", "--device-code"], { setup, serve });
+    expect(setup).toHaveBeenCalledWith(["--device-code"]);
   });
 
   it("routes default (no subcommand) to handlers.serve", async () => {

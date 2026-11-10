@@ -19,6 +19,12 @@ this server in `.juvant/config.json`.
 
 ## What's new
 
+**v0.6.0 — public-client auth, no client secret.** The server now
+signs in as an OAuth public client (authorization code + PKCE on a
+loopback redirect, device code fallback). Required configuration is
+the tenant ID and client ID only, and `setup` runs straight from npm.
+Existing users: see § Migrating from v0.5.x.
+
 **Teams meeting transcript support.** Two new read-only tools:
 
 - **`m365-graph:list_meeting_transcripts`** — given a calendar event ID, lists available post-meeting transcripts. Returns transcript IDs to pass to `get_transcript`.
@@ -26,7 +32,7 @@ this server in `.juvant/config.json`.
 
 Two new delegated scopes required (admin consent — see § Tools):
 `OnlineMeetings.Read` and `OnlineMeetingTranscript.Read.All`.
-**Re-run `npm run setup` after upgrading** to acquire them.
+**Re-run `setup` after upgrading** to acquire them.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full change list.
 
@@ -51,26 +57,38 @@ spec. See [`CHANGELOG.md`](CHANGELOG.md) for the per-version history.
 
 ## Install + run
 
-```bash
-# One-time OAuth (opens browser, persists tokens in OS keychain):
-npx @juvantlabs/m365-graph-mcp-server setup
+Nothing to clone. Register an Entra app once (§ Setup below), sign in
+once, then point your MCP client at the npm package:
 
-# Run the MCP server on stdio (default subcommand):
-npx @juvantlabs/m365-graph-mcp-server
+```bash
+# 1. One-time sign-in: opens the browser, caches tokens in the OS keychain
+M365_TENANT_ID=<tenant-id> M365_CLIENT_ID=<client-id> \
+  npx -y @juvantlabs/m365-graph-mcp-server@0.6.0 setup
+
+# 2. Register the server with Claude Code (or any MCP client)
+claude mcp add m365-graph -s local \
+  -e M365_TENANT_ID=<tenant-id> \
+  -e M365_CLIENT_ID=<client-id> \
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.6.0
 ```
 
-Requires Node ≥ 20. Both invocations expect the env vars below
-(typically loaded from `.env.local` via `--env-file`, or set by
-your MCP client when it spawns the server).
+Requires Node ≥ 20. The server is a **public client**: it holds no
+client secret. The tenant ID and client ID are identifiers, not
+credentials, so they can live in your MCP client configuration. The
+only sensitive material on disk is the MSAL token cache, kept in the OS
+keychain.
 
 ## Environment variables
 
-Required:
+Required. Both `setup` and the server read them from the process
+environment only; no file in the current directory is needed. No client
+secret: since v0.6.0 a leftover secret variable is ignored and a
+one-line deprecation warning is printed on stderr (see § Migrating from
+v0.5.x).
 
 | Variable | Purpose |
 |---|---|
 | `M365_CLIENT_ID` | Microsoft Entra application (client) ID for the registered app. |
-| `M365_CLIENT_SECRET` | Client secret for the registered app. Stored only in the consumer's environment; never in `.juvant/config.json`. |
 | `M365_TENANT_ID` | Microsoft Entra tenant ID (UUID). The canonical adoption pattern is **single-tenant** — see [ARCHITECTURE.md § Tenancy model](ARCHITECTURE.md#tenancy-model). The regex also accepts `common` / `organizations` / `consumers` for technical compatibility with Microsoft authority strings, but multi-tenant operation is not the supported deployment shape. |
 
 Optional:
@@ -99,7 +117,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 {
   "m365-graph": {
     "provider": "microsoft",
-    "mcp_server": "npx @juvantlabs/m365-graph-mcp-server@0.4.0",
+    "mcp_server": "npx -y @juvantlabs/m365-graph-mcp-server@0.6.0",
     "scope": "rw"
   }
 }
@@ -141,45 +159,97 @@ Step 8.5 cross-check semantics.
 
 That's 4 read + 5 write on files, 5 read + 4 write on calendars, 2 read on meeting transcripts — **20 tools total**. Read tools exercise delegated `Files.Read` + `Calendars.Read`; write tools require `Files.ReadWrite` + `Calendars.ReadWrite`; transcript tools require `OnlineMeetings.Read` + `OnlineMeetingTranscript.Read.All` (all separately granted + admin-consented in the Entra app).
 
+## Setup
+
+### 1. Register a Microsoft Entra app
+
+1. [Azure Portal](https://portal.azure.com/) → **Microsoft Entra ID** → **App registrations** → **New registration**.
+2. Name: `m365-graph-mcp-server` (or your team's convention). Supported account types: **single-tenant** (see [ARCHITECTURE.md § Tenancy model](ARCHITECTURE.md#tenancy-model)).
+3. Redirect URI: platform **Public client/native (mobile & desktop)**, URI `http://localhost`. Register.
+   (On an existing app: **Authentication** → **Add a platform** → **Mobile and desktop applications** → custom redirect URI `http://localhost`.)
+   Any port on `http://localhost` is accepted: `setup` listens on a free port chosen at run time.
+4. **Authentication** → **Allow public client flows**: set to **Yes** only if you will use `setup --device-code` (machines without a browser). Leave **No** otherwise.
+5. **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated**: `User.Read`, `Files.ReadWrite`, `Sites.ReadWrite.All`, `Calendars.ReadWrite`, `OnlineMeetings.Read`, `OnlineMeetingTranscript.Read.All`, `offline_access`. Then **Grant admin consent** (required for the two transcript scopes, see § Tools).
+6. **Certificates & secrets**: nothing to create. The server never uses a client secret or certificate.
+
+### 2. Sign in once (populate the keychain)
+
+```bash
+export M365_TENANT_ID=<tenant-id>
+export M365_CLIENT_ID=<client-id>
+npx -y @juvantlabs/m365-graph-mcp-server@0.6.0 setup
+```
+
+`setup` uses the OAuth 2.0 authorization code flow with PKCE: MSAL
+starts a one-shot listener on a free port of `127.0.0.1`, opens your
+default browser at Microsoft's sign-in page (the URL is also printed on
+stderr), receives the code on `http://localhost:<port>` and redeems it
+with the PKCE verifier. Tokens are persisted via `@napi-rs/keyring`
+(macOS Keychain / Linux Secret Service / Windows Credential Manager),
+keyed by tenant ID, independent of the current directory. After that,
+the server uses cached tokens silently and refreshes as needed.
+
+On a machine without a browser, use the device code flow (requires
+**Allow public client flows** = Yes on the app):
+
+```bash
+npx -y @juvantlabs/m365-graph-mcp-server@0.6.0 setup --device-code
+```
+
+Because the port is chosen at run time, `setup` can run while the
+sibling `m365-mail-mcp-server` setup is also in progress.
+
+### 3. Register the server with your MCP client
+
+```bash
+claude mcp add m365-graph -s local \
+  -e M365_TENANT_ID=<tenant-id> \
+  -e M365_CLIENT_ID=<client-id> \
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.6.0
+```
+
+Other MCP clients: spawn `npx -y @juvantlabs/m365-graph-mcp-server@0.6.0` over stdio with the same
+environment variables.
+
+### Migrating from v0.5.x (client secret → public client)
+
+Up to v0.5.x the server used a confidential client with a client secret
+and a fixed `http://localhost:3000/auth/callback` Web redirect. v0.6.0
+needs no secret. On your existing app registration:
+
+1. **Authentication** → **Add a platform** → **Mobile and desktop
+   applications** → custom redirect URI `http://localhost`.
+2. Set **Allow public client flows** to **Yes** only if you will use
+   `setup --device-code`.
+3. Remove the old **Web** redirect `http://localhost:3000/auth/callback`.
+4. **Certificates & secrets** → delete the client secret.
+5. Remove `M365_CLIENT_SECRET` from your MCP client configuration and
+   any `.env.local` (if it is still set, the server ignores it and
+   prints a one-line warning on stderr).
+6. Sign in again: `npx -y @juvantlabs/m365-graph-mcp-server@0.6.0 setup`. A refresh token cached by
+   v0.5.x was issued to a confidential client and may not be redeemable
+   without the secret; signing in again replaces it in the same keychain
+   entry. Until then, tool calls fail with `Silent token acquisition
+   failed: … Re-run … setup`.
+7. Update the version pin in your MCP client configuration to `0.6.0`.
+
+If `setup` fails with `AADSTS7000218` (the request body must contain
+`client_assertion` or `client_secret`), the app still treats the
+redirect as a Web (confidential) client: add the **Mobile and desktop
+applications** platform (step 1); for `--device-code`, also set
+**Allow public client flows** = Yes.
+
 ## Local development
 
-The repo expects a `.env.local` file with your tenant's credentials.
-Bootstrap from the template:
-
 ```bash
-cp .env.example .env.local
-# then edit .env.local with your M365_TENANT_ID, M365_CLIENT_ID,
-# and M365_CLIENT_SECRET — see ARCHITECTURE.md § Authentication
-# for the Entra app registration flow.
+npm install
+cp .env.example .env.local   # tenant ID + client ID; gitignored
+npm run setup                # = tsx --env-file=.env.local src/index.ts setup
+npm run dev                  # stdio server from source
 ```
 
-`.env.local` is gitignored.
-
-### One-time OAuth setup
-
-The first time you run the server, you need to complete an OAuth flow
-to populate the OS keychain with refresh tokens:
-
-```bash
-npm run setup
-```
-
-This opens your browser, signs you in to your tenant, captures the
-authorization code via a one-shot listener at
-`http://localhost:3000/auth/callback`, and persists the resulting
-tokens via `@napi-rs/keyring` (macOS Keychain / Linux Secret Service /
-Windows Credential Manager). After that, the server uses cached
-tokens silently — refreshes as needed via the cached refresh grant.
-
-### Run the MCP server
-
-```bash
-npm run dev
-```
-
-Listens on stdio. Useful when developing alongside an MCP client like
-Claude Code: configure the client to spawn `npm run dev` (or
-`tsx --env-file=.env.local src/index.ts`) as its MCP server command.
+`.env.local` is only a convenience for the `npm run setup` / `npm run
+dev` scripts in a checkout. The published package never reads it.
 
 ## Architecture
 

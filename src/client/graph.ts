@@ -17,7 +17,7 @@ import {
   type AuthenticationProvider,
   type AuthenticationProviderOptions,
 } from "@microsoft/microsoft-graph-client";
-import type { ConfidentialClientApplication } from "@azure/msal-node";
+import type { PublicClientApplication } from "@azure/msal-node";
 
 import { getAccessToken } from "../auth/msal.js";
 
@@ -31,14 +31,14 @@ import { getAccessToken } from "../auth/msal.js";
  * full Graph client.
  */
 export class MsalAuthProvider implements AuthenticationProvider {
-  constructor(private readonly msal: ConfidentialClientApplication) {}
+  constructor(private readonly msal: PublicClientApplication) {}
 
   async getAccessToken(_options?: AuthenticationProviderOptions): Promise<string> {
     return getAccessToken(this.msal);
   }
 }
 
-export function makeGraphClient(msal: ConfidentialClientApplication): Client {
+export function makeGraphClient(msal: PublicClientApplication): Client {
   return Client.initWithMiddleware({
     authProvider: new MsalAuthProvider(msal),
   });
