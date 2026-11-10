@@ -73,13 +73,13 @@ once, then point your MCP client at the npm package:
 ```bash
 # 1. One-time sign-in: opens the browser, caches tokens in the OS keychain
 M365_TENANT_ID=<tenant-id> M365_CLIENT_ID=<client-id> \
-  npx -y @juvantlabs/m365-graph-mcp-server@0.7.0 setup
+  npx -y @juvantlabs/m365-graph-mcp-server@0.7.1 setup
 
 # 2. Register the server with Claude Code (or any MCP client)
 claude mcp add m365-graph -s local \
   -e M365_TENANT_ID=<tenant-id> \
   -e M365_CLIENT_ID=<client-id> \
-  -- npx -y @juvantlabs/m365-graph-mcp-server@0.7.0
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.7.1
 ```
 
 Requires Node ≥ 20. The server is a **public client**: it holds no
@@ -127,7 +127,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 {
   "m365-graph": {
     "provider": "microsoft",
-    "mcp_server": "npx -y @juvantlabs/m365-graph-mcp-server@0.7.0",
+    "mcp_server": "npx -y @juvantlabs/m365-graph-mcp-server@0.7.1",
     "scope": "rw"
   }
 }
@@ -144,7 +144,7 @@ Step 8.5 cross-check semantics.
 
 | Tool | Purpose | Input | Output | Required scope |
 |---|---|---|---|---|
-| `m365-graph:list_sites` | Finds SharePoint sites the user can access (keyword search; `*` = all). Security-trimmed by SharePoint. Pass a returned `id` to `list_drives`. | `query?` (default `*`, 1–200 chars), `limit?` (1–100, default 50) | `{ query, count, sites: [] }` with id / name / display_name / web_url. | `Sites.Read.All` (covered by `Sites.ReadWrite.All`) |
+| `m365-graph:list_sites` | Finds SharePoint sites the user can access (keyword search; `*` = all). If the keyword search finds nothing (Graph search can miss e.g. hyphenated names), falls back to a case-insensitive substring match on name, display name and URL over all accessible sites. Security-trimmed by SharePoint. Pass a returned `id` to `list_drives`. | `query?` (default `*`, 1–200 chars), `limit?` (1–100, default 50) | `{ query, match, count, sites: [] }` (`match`: `search` or `name_filter`) with id / name / display_name / web_url. | `Sites.Read.All` (covered by `Sites.ReadWrite.All`) |
 | `m365-graph:list_drives` | Without `site_id`: the user's own OneDrive drives (primary + `/me/drives`). With `site_id`: the document libraries of that SharePoint site. SharePoint libraries are only returned with `site_id`. | `site_id?` (from `list_sites`, `{hostname},{guid},{guid}`) | without `site_id`: `{ primary, accessible: [], note }`; with: `{ site_id, count, drives: [] }`. Drives carry id / driveType / name / webUrl / owner. | `Files.Read`; `Sites.Read.All` with `site_id` |
 | `m365-graph:list_items` | Lists immediate children (files + folders) of a folder. Defaults to the drive root. | `drive_id?`, `item_id?`, `limit?` (1–100, default 50) | `{ count, items: [] }` with id / name / type / size / child_count / lastModified / webUrl. | `Files.Read` |
 | `m365-graph:search_files` | Searches files by name and content within a drive. | `query` (required), `drive_id?`, `limit?` (1–50, default 20) | `{ count, results: [] }` with id / name / path / size / is_folder / lastModified / webUrl. | `Files.Read` |
@@ -188,7 +188,7 @@ That's 5 read + 5 write on files (including SharePoint site discovery), 5 read +
 ```bash
 export M365_TENANT_ID=<tenant-id>
 export M365_CLIENT_ID=<client-id>
-npx -y @juvantlabs/m365-graph-mcp-server@0.7.0 setup
+npx -y @juvantlabs/m365-graph-mcp-server@0.7.1 setup
 ```
 
 `setup` uses the OAuth 2.0 authorization code flow with PKCE: MSAL
@@ -204,7 +204,7 @@ On a machine without a browser, use the device code flow (requires
 **Allow public client flows** = Yes on the app):
 
 ```bash
-npx -y @juvantlabs/m365-graph-mcp-server@0.7.0 setup --device-code
+npx -y @juvantlabs/m365-graph-mcp-server@0.7.1 setup --device-code
 ```
 
 Because the port is chosen at run time, `setup` can run while the
@@ -225,10 +225,10 @@ list_items / search_files / download_file / upload_file / create_folder
 claude mcp add m365-graph -s local \
   -e M365_TENANT_ID=<tenant-id> \
   -e M365_CLIENT_ID=<client-id> \
-  -- npx -y @juvantlabs/m365-graph-mcp-server@0.7.0
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.7.1
 ```
 
-Other MCP clients: spawn `npx -y @juvantlabs/m365-graph-mcp-server@0.7.0` over stdio with the same
+Other MCP clients: spawn `npx -y @juvantlabs/m365-graph-mcp-server@0.7.1` over stdio with the same
 environment variables.
 
 ### Migrating from v0.5.x (client secret → public client)
@@ -246,12 +246,12 @@ needs no secret. On your existing app registration:
 5. Remove `M365_CLIENT_SECRET` from your MCP client configuration and
    any `.env.local` (if it is still set, the server ignores it and
    prints a one-line warning on stderr).
-6. Sign in again: `npx -y @juvantlabs/m365-graph-mcp-server@0.7.0 setup`. A refresh token cached by
+6. Sign in again: `npx -y @juvantlabs/m365-graph-mcp-server@0.7.1 setup`. A refresh token cached by
    v0.5.x was issued to a confidential client and may not be redeemable
    without the secret; signing in again replaces it in the same keychain
    entry. Until then, tool calls fail with `Silent token acquisition
    failed: … Re-run … setup`.
-7. Update the version pin in your MCP client configuration to `0.7.0` (or later).
+7. Update the version pin in your MCP client configuration to `0.7.1` (or later).
 
 If `setup` fails with `AADSTS7000218` (the request body must contain
 `client_assertion` or `client_secret`), the app still treats the

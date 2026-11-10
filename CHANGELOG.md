@@ -11,6 +11,20 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.1] — `list_sites` finds hyphenated site names
+
+### Fixed — Files
+
+- **`m365-graph:list_sites` returned nothing for queries such as a
+  hyphenated site name** (`team-finance`), because Graph's
+  `/sites?search=` is a keyword search. When a specific query returns
+  no results, the tool now lists all accessible sites (`search=*`,
+  pages of 200, at most 5 pages; next links followed only to
+  `https://graph.microsoft.com/`) and keeps those whose name, display
+  name or URL contains the query (case-insensitive). The response
+  carries `match: "search"` or `match: "name_filter"`.
+- No scope, schema or other tool change.
+
 ## [0.7.0] — SharePoint document libraries: `list_sites` + `list_drives(site_id)`
 
 ### Added — Files
