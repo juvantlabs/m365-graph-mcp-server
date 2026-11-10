@@ -1,7 +1,7 @@
 import type { Client } from "@microsoft/microsoft-graph-client";
 import { describe, expect, it, vi } from "vitest";
 
-import { listDrivesTool, summarizeDrive } from "../../src/tools/list_drives.js";
+import { SITE_ID_RE, listDrivesTool, summarizeDrive } from "../../src/tools/list_drives.js";
 
 describe("summarizeDrive", () => {
   it("extracts core fields from a Graph drive object", () => {
@@ -89,5 +89,71 @@ describe("listDrivesTool handler", () => {
     const resp = await listDrivesTool.handler(client, {});
     const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
     expect(parsed.accessible).toHaveLength(0);
+  });
+
+  it("says that SharePoint libraries need list_sites + site_id", async () => {
+    const primary = { id: "drv1", driveType: "business", name: "OneDrive", webUrl: "" };
+    const resp = await listDrivesTool.handler(mockClient(primary, { value: [] }), {});
+    const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
+    expect(parsed.note).toMatch(/list_sites/);
+  });
+});
+
+describe("listDrivesTool with site_id (SharePoint document libraries)", () => {
+  const SITE_ID =
+    "contoso.sharepoint.com,11111111-1111-1111-1111-111111111111,22222222-2222-2222-2222-222222222222";
+
+  function siteClient(value: unknown): { client: Client; paths: string[] } {
+    const paths: string[] = [];
+    const api = vi.fn().mockImplementation((path: string) => {
+      paths.push(path);
+      return { get: async () => value };
+    });
+    return { client: { api } as unknown as Client, paths };
+  }
+
+  it("declares site_id in the input schema (scopable by the harness)", () => {
+    expect(listDrivesTool.definition.inputSchema.properties).toHaveProperty("site_id");
+    expect(listDrivesTool.definition.description).toMatch(/list_sites/);
+  });
+
+  it("lists the site's libraries from /sites/{site-id}/drives only", async () => {
+    const lib = {
+      id: "b!AbC-123_xyz",
+      driveType: "documentLibrary",
+      name: "invoices",
+      webUrl: "https://contoso.sharepoint.com/sites/finance/invoices",
+    };
+    const { client, paths } = siteClient({ value: [lib] });
+    const resp = await listDrivesTool.handler(client, { site_id: SITE_ID });
+    const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
+
+    expect(paths).toEqual([`/sites/${SITE_ID}/drives`]);
+    expect(parsed).toMatchObject({ site_id: SITE_ID, count: 1 });
+    expect(parsed.drives[0]).toMatchObject({ id: "b!AbC-123_xyz", driveType: "documentLibrary", name: "invoices" });
+  });
+
+  it("handles a site with no libraries", async () => {
+    const { client } = siteClient({});
+    const resp = await listDrivesTool.handler(client, { site_id: SITE_ID });
+    const parsed = JSON.parse((resp.content[0] as { type: string; text: string }).text);
+    expect(parsed).toMatchObject({ count: 0, drives: [] });
+  });
+
+  it.each([
+    "contoso.sharepoint.com",
+    "contoso.sharepoint.com:/sites/finance",
+    "../me/drive",
+    `${SITE_ID}/../../me`,
+    `${SITE_ID}?x=1`,
+    "contoso.sharepoint.com,not-a-guid,22222222-2222-2222-2222-222222222222",
+  ])("rejects malformed site_id %j before any Graph call", async (bad) => {
+    const { client, paths } = siteClient({ value: [] });
+    await expect(listDrivesTool.handler(client, { site_id: bad })).rejects.toThrow(/site_id/);
+    expect(paths).toEqual([]);
+  });
+
+  it("SITE_ID_RE accepts the shape Graph returns", () => {
+    expect(SITE_ID_RE.test(SITE_ID)).toBe(true);
   });
 });

@@ -13,6 +13,7 @@ import type { Tool } from "../types/tool.js";
 import { downloadFileTool } from "./download_file.js";
 import { listDrivesTool } from "./list_drives.js";
 import { listItemsTool } from "./list_items.js";
+import { listSitesTool } from "./list_sites.js";
 import { searchFilesTool } from "./search_files.js";
 // Files — write
 import { copyFileTool } from "./copy_file.js";
@@ -37,6 +38,7 @@ import { updateEventTool } from "./update_event.js";
 
 export const ALL_TOOLS: ReadonlyArray<Tool> = [
   // Files — read
+  listSitesTool,
   listDrivesTool,
   listItemsTool,
   searchFilesTool,

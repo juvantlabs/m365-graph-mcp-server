@@ -69,6 +69,10 @@ const SCOPABLE_PARAMS: ReadonlyArray<string> = [
  * non-scopable surface and must be justified in code review.
  */
 const NO_TARGET_TOOLS: ReadonlySet<string> = new Set([
+  // Site discovery: security-trimmed by SharePoint, read-only, returns
+  // only ids/names/URLs. The harness scopes the follow-up calls
+  // (list_drives site_id, file tools drive_id).
+  "m365-graph:list_sites",
   "m365-graph:list_drives",
   "m365-graph:list_calendars",
   "m365-graph:search_events",

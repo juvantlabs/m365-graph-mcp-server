@@ -125,6 +125,20 @@ describe("uploadFileTool handler — small file path", () => {
     expect(apiCalls[0]).toBe("/drives/drv-1/root:/h.txt:/content");
   });
 
+  it("uploads into a SharePoint library folder by drive_id + parent_item_id with conflict 'fail'", async () => {
+    // SharePoint document-library drive IDs look like `b!<base64url>`;
+    // `!` is not percent-encoded by encodeURIComponent and Graph accepts it.
+    const localPath = await writeTempFile("invoice 2026-11.pdf", "%PDF-1.7");
+    const { apiCalls, queries, client } = captureSmallPut({ id: "new", name: "invoice 2026-11.pdf" });
+    await uploadFileTool.handler(client, {
+      local_path: localPath,
+      drive_id: "b!AbC-123_xyz",
+      parent_item_id: "01FOLDER",
+    });
+    expect(apiCalls[0]).toBe("/drives/b!AbC-123_xyz/items/01FOLDER:/invoice%202026-11.pdf:/content");
+    expect(queries[0]).toEqual({ "@microsoft.graph.conflictBehavior": "fail" });
+  });
+
   it("respects custom name", async () => {
     const localPath = await writeTempFile("original.txt", "x");
     const { apiCalls, client } = captureSmallPut({});
