@@ -11,6 +11,16 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — `expected_parent_id` guard on delete and move
+
+### Added — Files
+
+- **`expected_parent_id` on `m365-graph:delete_file` and `m365-graph:move_file`** (optional). The tool reads the item first, and refuses with "Nothing was changed" unless the item's current parent folder has exactly that id.
+  - `delete_file` checks at the preview and again right before deleting, because the item may move in between. The confirmation token is bound to `expected_parent_id`, so the argument must be passed on both calls.
+  - Purpose: a caller, or a policy hook in front of the server, can limit moves and deletes to one folder. The argument says where the item is, and the server checks that it is true.
+  - Omitted, both tools behave exactly as before. `move_file` then makes no extra read.
+- Version pins in the README updated to `0.8.0`.
+
 ## [0.7.2] — documentation only
 
 No code, tool, schema or scope change.
