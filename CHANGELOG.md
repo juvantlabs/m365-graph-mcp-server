@@ -11,6 +11,17 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.2] — documentation only
+
+No code, tool, schema or scope change.
+
+### Changed — docs
+
+- README and ARCHITECTURE no longer link `docs/MCP_INVENTORY.md` in
+  juvantlabs/juvant-os, which is going away. Published so the README on
+  npm matches the repository.
+- Version pins in the README updated to `0.7.2`.
+
 ## [0.7.1] — `list_sites` finds hyphenated site names
 
 ### Fixed — Files
