@@ -20,6 +20,7 @@ import {
   validateOptionalString,
   validateRequiredString,
 } from "../types/validators.js";
+import { assertExpectedParent } from "./_expected_parent.js";
 import { summarizeCopiedItem } from "./copy_file.js";
 import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/tool.js";
 
@@ -34,6 +35,11 @@ const definition: ToolDefinition = {
       target_parent_id: { type: "string", description: "Destination folder ID (in the same drive)." },
       drive_id: { type: "string", description: "Optional drive ID. Defaults to /me/drive." },
       new_name: { type: "string", description: "Optional rename during the move." },
+      expected_parent_id: {
+        type: "string",
+        description:
+          "Optional guard: the id of the folder the item must be in now. If the item's current parent differs, the tool refuses and changes nothing.",
+      },
     },
     required: ["item_id", "target_parent_id"],
   },
@@ -47,10 +53,13 @@ const handler: ToolHandler = async (
   const targetParentId = validateRequiredString(args.target_parent_id, "target_parent_id");
   const driveId = validateOptionalString(args.drive_id, "drive_id");
   const newName = validateOptionalString(args.new_name, "new_name");
+  const expectedParentId = validateOptionalString(args.expected_parent_id, "expected_parent_id");
 
   const apiPath = driveId
     ? `/drives/${encodeURIComponent(driveId)}/items/${encodeURIComponent(itemId)}`
     : `/me/drive/items/${encodeURIComponent(itemId)}`;
+
+  await assertExpectedParent(graph, apiPath, itemId, expectedParentId, "move");
 
   const body: Record<string, unknown> = {
     parentReference: { id: targetParentId },
