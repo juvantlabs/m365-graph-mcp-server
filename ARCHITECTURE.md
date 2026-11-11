@@ -363,5 +363,4 @@ security smell (handbook anti-pattern S1).
 - [Handbook MCP server spec](https://github.com/juvantlabs/handbook/blob/main/docs/repo-types/mcp-server.md)
 - [Handbook MCP abstract roles ADR (0002)](https://github.com/juvantlabs/handbook/blob/main/docs/adr/0002-mcp-abstract-roles.md)
 - [Handbook security disclosure process](https://github.com/juvantlabs/handbook/blob/main/docs/security/disclosure-process.md)
-- [Juvant OS MCP_INVENTORY.md](https://github.com/juvantlabs/juvant-os/blob/main/docs/MCP_INVENTORY.md)
 - [ftaricano audit (2026-05-03)](https://gist.github.com/juvantlabs/a9fe0a76a23b0c1260b1e0ad3194a6da) — origin of the 12-item anti-pattern checklist
