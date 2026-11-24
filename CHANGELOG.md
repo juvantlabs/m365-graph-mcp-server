@@ -11,6 +11,21 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — download retention
+
+### Changed
+
+- **Downloaded copies are deleted after `M365_DOWNLOAD_TTL_HOURS`** (1–720, default 24), at startup, hourly while the server runs, and after each download. Before, they stayed until deleted by hand: copies already older than the limit are deleted at the first start of this version. Move what you want to keep first.
+  - Only regular files with the server's own name shape (`<16 hex>-<name>`), directly inside a tenant folder of the sandbox, are deleted. Symlinks are not followed. Logs carry counts, not names.
+
+### Added
+
+- **`M365_DOWNLOAD_MODE=return`**: `download_file` writes nothing and returns the content (text, or base64), up to 2 MiB. An unrecognised value stops the server.
+
+### Fixed
+
+- A download that fails midway leaves no partial file.
+
 ## [0.8.0] — `expected_parent_id` guard on delete and move
 
 ### Added — Files

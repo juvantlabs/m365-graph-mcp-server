@@ -73,13 +73,13 @@ once, then point your MCP client at the npm package:
 ```bash
 # 1. One-time sign-in: opens the browser, caches tokens in the OS keychain
 M365_TENANT_ID=<tenant-id> M365_CLIENT_ID=<client-id> \
-  npx -y @juvantlabs/m365-graph-mcp-server@0.8.0 setup
+  npx -y @juvantlabs/m365-graph-mcp-server@0.9.0 setup
 
 # 2. Register the server with Claude Code (or any MCP client)
 claude mcp add m365-graph -s local \
   -e M365_TENANT_ID=<tenant-id> \
   -e M365_CLIENT_ID=<client-id> \
-  -- npx -y @juvantlabs/m365-graph-mcp-server@0.8.0
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.9.0
 ```
 
 Requires Node ≥ 20. The server is a **public client**: it holds no
@@ -107,6 +107,8 @@ Optional:
 |---|---|
 | `MCP_SERVER_LOG_LEVEL` | Log level for diagnostics on stderr (default `info`). |
 | `M365_DOWNLOAD_DIR` | Override the per-tenant sandbox directory used by `download_file`. Default: `$XDG_CACHE_HOME/m365-graph-mcp-server/<tenant-id>` or `~/.cache/m365-graph-mcp-server/<tenant-id>`. |
+| `M365_DOWNLOAD_TTL_HOURS` | How long downloaded copies stay on disk, in hours: 1–720, default 24. Older copies are deleted at startup, hourly while the server runs, and after each download. |
+| `M365_DOWNLOAD_MODE` | `file` (default) writes the download to the sandbox. `return` writes nothing and returns the content in the response (text, or base64), up to 2 MiB. Any other value stops the server. |
 | `M365_TRANSCRIPT_MAX_BYTES` | Max raw VTT bytes read from Graph per `get_transcript` call. Defense-in-depth bound against the audit-S7 whole-file-buffering pattern. Default `10000000` (10 MB ≈ 8 h+ of speech). |
 | `M365_TRANSCRIPT_MAX_CHARS` | Max parsed-text characters returned in a single `get_transcript` response. Long transcripts page via the tool's `offset` + `next_offset` fields. Default `200000` (~2 h of speech). |
 
@@ -119,6 +121,12 @@ OAuth scope minimization is per-tool; see the [tool catalog](#tools)
 and [`ARCHITECTURE.md`](ARCHITECTURE.md) for the per-tool scope
 justifications.
 
+## Downloaded files on this machine
+
+`download_file` writes a plaintext copy under the sandbox folder (`M365_DOWNLOAD_DIR`), readable only by your user, and returns its path. The server deletes its own copies after `M365_DOWNLOAD_TTL_HOURS` (default 24 hours): **move what you want to keep elsewhere.** Only files it named itself, inside tenant folders, are ever deleted; symlinks are not followed.
+
+It cleans up only while it runs: if it isn't started again, copies stay. With `M365_DOWNLOAD_MODE=return` nothing is written by the server, but the content goes into the MCP client's conversation, which may keep it.
+
 ## Binding
 
 The Juvant OS adopter binds this server in `.juvant/config.json`:
@@ -127,7 +135,7 @@ The Juvant OS adopter binds this server in `.juvant/config.json`:
 {
   "m365-graph": {
     "provider": "microsoft",
-    "mcp_server": "npx -y @juvantlabs/m365-graph-mcp-server@0.8.0",
+    "mcp_server": "npx -y @juvantlabs/m365-graph-mcp-server@0.9.0",
     "scope": "rw"
   }
 }
@@ -183,7 +191,7 @@ That's 5 read + 5 write on files (including SharePoint site discovery), 5 read +
 ```bash
 export M365_TENANT_ID=<tenant-id>
 export M365_CLIENT_ID=<client-id>
-npx -y @juvantlabs/m365-graph-mcp-server@0.8.0 setup
+npx -y @juvantlabs/m365-graph-mcp-server@0.9.0 setup
 ```
 
 `setup` uses the OAuth 2.0 authorization code flow with PKCE: MSAL
@@ -199,7 +207,7 @@ On a machine without a browser, use the device code flow (requires
 **Allow public client flows** = Yes on the app):
 
 ```bash
-npx -y @juvantlabs/m365-graph-mcp-server@0.8.0 setup --device-code
+npx -y @juvantlabs/m365-graph-mcp-server@0.9.0 setup --device-code
 ```
 
 Because the port is chosen at run time, `setup` can run while the
@@ -220,10 +228,10 @@ list_items / search_files / download_file / upload_file / create_folder
 claude mcp add m365-graph -s local \
   -e M365_TENANT_ID=<tenant-id> \
   -e M365_CLIENT_ID=<client-id> \
-  -- npx -y @juvantlabs/m365-graph-mcp-server@0.8.0
+  -- npx -y @juvantlabs/m365-graph-mcp-server@0.9.0
 ```
 
-Other MCP clients: spawn `npx -y @juvantlabs/m365-graph-mcp-server@0.8.0` over stdio with the same
+Other MCP clients: spawn `npx -y @juvantlabs/m365-graph-mcp-server@0.9.0` over stdio with the same
 environment variables.
 
 ### Migrating from v0.5.x (client secret → public client)
@@ -241,12 +249,12 @@ needs no secret. On your existing app registration:
 5. Remove `M365_CLIENT_SECRET` from your MCP client configuration and
    any `.env.local` (if it is still set, the server ignores it and
    prints a one-line warning on stderr).
-6. Sign in again: `npx -y @juvantlabs/m365-graph-mcp-server@0.8.0 setup`. A refresh token cached by
+6. Sign in again: `npx -y @juvantlabs/m365-graph-mcp-server@0.9.0 setup`. A refresh token cached by
    v0.5.x was issued to a confidential client and may not be redeemable
    without the secret; signing in again replaces it in the same keychain
    entry. Until then, tool calls fail with `Silent token acquisition
    failed: … Re-run … setup`.
-7. Update the version pin in your MCP client configuration to `0.8.0` (or later).
+7. Update the version pin in your MCP client configuration to `0.9.0` (or later).
 
 If `setup` fails with `AADSTS7000218` (the request body must contain
 `client_assertion` or `client_secret`), the app still treats the

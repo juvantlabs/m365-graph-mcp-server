@@ -25,6 +25,8 @@
  *     writing — an extra check on top of the structurally-safe naming.
  *   - Same item → same local path; a repeat download overwrites the
  *     previous copy (deterministic, no accumulation).
+ *   - Copies are deleted after M365_DOWNLOAD_TTL_HOURS, and
+ *     M365_DOWNLOAD_MODE=return writes none (see _downloads.ts).
  *
  * Size cap: 200 MB (handbook spec § Performance characteristics). Item
  * size is fetched via `/items/{id}` metadata BEFORE downloading; the
@@ -86,6 +88,13 @@ import {
   validateOptionalString,
   validateRequiredString,
 } from "../types/validators.js";
+import {
+  getDownloadMode,
+  readInline,
+  RETURN_MAX_BYTES,
+  sweepDownloads,
+  tooLargeToReturn,
+} from "./_downloads.js";
 import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/tool.js";
 
 const MAX_FILE_SIZE_BYTES = 200 * 1024 * 1024; // 200 MB per handbook spec
@@ -149,7 +158,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const definition: ToolDefinition = {
   name: "m365-graph:download_file",
   description:
-    "Download a file from a drive to a local sandbox directory. Returns the local path, not the file content — agents read the file via a filesystem-aware tool. Size is capped at 200 MB. Optional `format: \"pdf\"` has Microsoft Graph convert the file to PDF server-side (Word, Excel, PowerPoint, OpenDocument, RTF, HTML, Markdown, email, TIFF, …) and saves the PDF instead of the original. Read-only on the cloud side.",
+    "Download a file from a drive to a local sandbox directory. Returns the local path, not the file content — agents read the file via a filesystem-aware tool. Local copies are deleted after a retention period (default 24 hours): copy elsewhere what must be kept. If the server runs with M365_DOWNLOAD_MODE=return, nothing is written and the content (max 2 MiB) is in the response instead. Size is capped at 200 MB. Optional `format: \"pdf\"` has Microsoft Graph convert the file to PDF server-side (Word, Excel, PowerPoint, OpenDocument, RTF, HTML, Markdown, email, TIFF, …) and saves the PDF instead of the original. Read-only on the cloud side.",
   inputSchema: {
     type: "object",
     properties: {
@@ -375,10 +384,25 @@ async function writeCapped(response: Response, localPath: string): Promise<numbe
   return counter.bytes();
 }
 
+/** M365_DOWNLOAD_MODE=return: the content in the response, nothing on disk. */
+async function inlineResponse(
+  response: Response,
+  contentType: string | null,
+  fields: Record<string, unknown>,
+): Promise<ToolResponse> {
+  if (!response.body) {
+    throw new Error("Download response has no body stream.");
+  }
+  const content = await readInline(Readable.fromWeb(response.body as never), contentType);
+  const result = { ...fields, local_path: null, ...content };
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+}
+
 const handler: ToolHandler = async (
   graph: Client,
   args: Record<string, unknown>,
 ): Promise<ToolResponse> => {
+  const inline = getDownloadMode() === "return";
   const itemId = validateRequiredString(args.item_id, "item_id");
   const driveId = validateOptionalString(args.drive_id, "drive_id");
   const format = validateOptionalStrictEnum(args.format, "format", DOWNLOAD_FORMATS);
@@ -397,12 +421,36 @@ const handler: ToolHandler = async (
     );
   }
 
+  // With `format` the source size says nothing about the converted size.
+  if (inline && format === undefined && size > RETURN_MAX_BYTES) {
+    throw new Error(tooLargeToReturn());
+  }
+
   const itemName = String(item.name ?? "");
   const sourceContentType =
     (item.file as Record<string, unknown> | undefined)?.mimeType ?? null;
 
   if (format !== undefined) {
     const sourceExtension = checkConvertible(itemName, format);
+
+    if (inline) {
+      const converted = await fetchConverted(
+        graph,
+        buildConvertedContentPath(driveRoot, itemId, format),
+        itemName,
+        sourceExtension,
+        format,
+      );
+      return inlineResponse(converted, FORMAT_CONTENT_TYPES[format], {
+        item_id: itemId,
+        drive_id: driveId ?? null,
+        name: itemName,
+        content_type: FORMAT_CONTENT_TYPES[format],
+        format,
+        source_size_bytes: size,
+        source_content_type: sourceContentType,
+      });
+    }
 
     const tenantId = process.env.M365_TENANT_ID ?? "unknown";
     const sandboxRoot = getSandboxRoot(tenantId);
@@ -421,6 +469,7 @@ const handler: ToolHandler = async (
       format,
     );
     const written = await writeCapped(response, localPath);
+    await sweepDownloads(sandboxRoot);
 
     const result = {
       item_id: itemId,
@@ -445,6 +494,20 @@ const handler: ToolHandler = async (
     );
   }
 
+  if (inline) {
+    const raw = await fetch(downloadUrl);
+    if (!raw.ok) {
+      throw new Error(`Download HTTP ${raw.status}: ${raw.statusText}`);
+    }
+    return inlineResponse(raw, typeof sourceContentType === "string" ? sourceContentType : null, {
+      item_id: itemId,
+      drive_id: driveId ?? null,
+      name: itemName,
+      content_type: sourceContentType,
+      format: null,
+    });
+  }
+
   const tenantId = process.env.M365_TENANT_ID ?? "unknown";
   const sandboxRoot = getSandboxRoot(tenantId);
   await mkdir(sandboxRoot, { recursive: true, mode: SANDBOX_DIR_MODE });
@@ -463,7 +526,14 @@ const handler: ToolHandler = async (
   // Node 20+ Web→Node stream interop. The `as ReadableStream` cast is
   // because node:stream's Readable.fromWeb expects the Node-bundled
   // ReadableStream, but undici's fetch returns the same shape.
-  await pipeline(Readable.fromWeb(response.body as never), out);
+  try {
+    await pipeline(Readable.fromWeb(response.body as never), out);
+  } catch (err) {
+    // No partial artifact left in the sandbox.
+    await rm(localPath, { force: true }).catch(() => undefined);
+    throw err;
+  }
+  await sweepDownloads(sandboxRoot);
 
   const result = {
     item_id: itemId,
