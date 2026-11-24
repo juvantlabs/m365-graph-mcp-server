@@ -101,15 +101,15 @@ describe("retention", () => {
   it.each([
     [undefined, 24], ["", 24], ["abc", 24], ["-1", 24], ["1.5", 24], ["0", 1], ["48", 48], ["99999", 720],
   ])("TTL %s is %d hours", (raw, hours) => {
-    expect(getTtlHours({ M365_DOWNLOAD_TTL_HOURS: raw })).toBe(hours);
+    expect(getTtlHours(raw)).toBe(hours);
   });
 });
 
 describe("download mode", () => {
   it("accepts file and return, refuses anything else", () => {
-    expect(getDownloadMode({})).toBe("file");
-    expect(getDownloadMode({ M365_DOWNLOAD_MODE: "return" })).toBe("return");
-    expect(() => getDownloadMode({ M365_DOWNLOAD_MODE: "Return" })).toThrow(/must be/);
+    expect(getDownloadMode(undefined)).toBe("file");
+    expect(getDownloadMode("return")).toBe("return");
+    expect(() => getDownloadMode("Return")).toThrow(/must be/);
   });
 
   it("readInline returns text, base64, and enforces the limit while streaming", async () => {

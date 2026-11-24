@@ -32,16 +32,18 @@ const TENANT_DIR_RE =
 export type DownloadMode = "file" | "return";
 
 /** A value that isn't recognised is refused: guessing could write to disk. */
-export function getDownloadMode(env: NodeJS.ProcessEnv = process.env): DownloadMode {
-  const raw = env.M365_DOWNLOAD_MODE;
+export function getDownloadMode(
+  raw: string | undefined = process.env.M365_DOWNLOAD_MODE,
+): DownloadMode {
   if (raw === undefined || raw === "" || raw === "file") return "file";
   if (raw === "return") return "return";
   throw new Error("M365_DOWNLOAD_MODE must be 'file' or 'return'.");
 }
 
 /** Hours to keep downloads. Out-of-range values are clamped; anything else is the default. */
-export function getTtlHours(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.M365_DOWNLOAD_TTL_HOURS;
+export function getTtlHours(
+  raw: string | undefined = process.env.M365_DOWNLOAD_TTL_HOURS,
+): number {
   if (raw === undefined || !/^\d{1,9}$/.test(raw)) return DEFAULT_TTL_HOURS;
   return Math.min(MAX_TTL_HOURS, Math.max(MIN_TTL_HOURS, Number(raw)));
 }
