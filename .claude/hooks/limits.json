@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Hard limits (design \u00a77). MCP rules match the tool's own name, the part after the last '__', lowercased, for any server prefix. Order: money deny, outbound deny (drafts exempt), then ask. Regexes are Python syntax.",
+  "_comment": "Hard limits (design \u00a77). MCP rules match the tool's own name, the part after the last '__', lowercased, for any server prefix. Order: money deny, outbound deny (drafts exempt), create allow, then ask. A rule's optional \"input\" reads the tool's arguments: keys are compared lowercased with everything but letters and digits removed, by suffix (conflict_behavior, conflictBehavior and @microsoft.graph.conflictBehavior all end in conflictbehavior); \"allow\" must match every such value; \"when_missing\" decides when no such key is given. Regexes are Python syntax.",
   "mcp": {
     "draft_allow": "draft",
     "draft_never": "(^|_)send(_|$)",
@@ -18,18 +18,109 @@
         "why": "outbound is draft-only: agents draft, the CEO sends (hard limit 1). Create a draft instead"
       }
     ],
+    "create": [
+      {
+        "id": "create-upload",
+        "pattern": "(^|_)upload(_|$)",
+        "input": {
+          "key": "conflictbehavior",
+          "allow": "^(fail|rename)$",
+          "when_missing": false
+        },
+        "why": "uploads a new file: on a name clash it fails or picks a new name, so nothing is lost"
+      },
+      {
+        "id": "create-folder",
+        "pattern": "create_folder",
+        "input": {
+          "key": "conflictbehavior",
+          "allow": "^(fail|rename)$",
+          "when_missing": true
+        },
+        "why": "creates a folder; the servers fail or rename on a name clash"
+      },
+      {
+        "id": "create-copy",
+        "pattern": "(^|_)copy(_|$)",
+        "input": {
+          "key": "conflictbehavior",
+          "allow": "^(fail|rename)$",
+          "when_missing": true
+        },
+        "why": "copies to a new item; the servers fail on a name clash at the destination"
+      }
+    ],
+    "_create": "Creating can't lose anything, so it doesn't ask (hard limit 4, three classes, decided 2026-11-11). An upload counts as creating only if it explicitly sets its conflict behaviour to fail or rename: defaults differ by server.",
+    "resource_tools": {
+      "_comment": "Tools with a generic verb, whose real action is a resource path in their arguments. The path must be one plain relative path in the arguments. Order: deny, then allow, then ask: whatever isn't recognised asks, and a long-task authorization doesn't cover it. Names match the tool's own name whole, with any server's own prefix. `words` are matched against each plain word of the path (lowercased, letters only); `last` against its last word; `allow` against the whole lowercased path without its query.",
+      "path_key": "(url|uri|path|endpoint|resource)s?$",
+      "verbs": [
+        {
+          "id": "resource-action",
+          "tool": "(do|invoke|execute|perform|run)_action",
+          "deny_last": "(send|reply|forward|respond|post|publish|share|invite|accept|decline|tentativelyaccept|cancel|grant|createlink|batch).*",
+          "deny_words": "batch",
+          "allow": "/(me|users/[^/]+)(/mailfolders/[^/]+)*/messages/[^/]+/create(reply|replyall|forward)|/(me|users/[^/]+)/(calendar/getschedule|findmeetingtimes|getmailtips)",
+          "why": "the action is in the arguments: sending, sharing and answering invitations stay with the CEO (hard limit 1); an action that isn't known to be harmless is confirmed by the CEO"
+        },
+        {
+          "id": "resource-function",
+          "tool": "(call|invoke|execute|run)_function",
+          "deny_last": "(send|reply|forward|respond|post|publish|invite|cancel|grant|createlink|batch).*",
+          "deny_words": "batch",
+          "allow": "/(me|users/[^/]+)(/[^/]+)*/(calendarview|delta|remindersview)(\\(\\))?|/sites(/[^/]+)+/delta(\\(\\))?",
+          "why": "the operation is in the arguments: a function that isn't known to only read is confirmed by the CEO"
+        },
+        {
+          "id": "resource-create",
+          "tool": "create_entity",
+          "deny_last": "(send|reply|forward|respond|post|publish|invite).*",
+          "deny_words": "(events?|permissions?|invitations?|replies|posts|comments|messagerules?|chats|channels|conversations|threads|engage|batch)",
+          "allow": "/(me|users/[^/]+)(/mailfolders/[^/]+)?(/childfolders/[^/]+)*/messages(/[^/]+/attachments)?|/me/todo/lists/[^/]+/tasks",
+          "why": "creates something: invitations, posts, sharing and mail rules stay with the CEO (hard limit 1), mail drafts are fine, anything else is confirmed by the CEO"
+        },
+        {
+          "id": "resource-update",
+          "tool": "(update|patch|replace|upsert)_entity",
+          "deny_last": "(send|reply|forward|respond|post|publish|invite).*",
+          "deny_words": "(events?|permissions?|invitations?|replies|posts|comments|messagerules?|chats|channels|conversations|threads|engage|mailboxsettings|batch)",
+          "allow": "/(me|users/[^/]+)(/mailfolders/[^/]+)?(/childfolders/[^/]+)*/messages/[^/]+",
+          "why": "changes something: invitations, posts, sharing and mailbox rules stay with the CEO (hard limit 1), mail drafts are fine, anything else is confirmed by the CEO (hard limit 4)"
+        },
+        {
+          "id": "resource-delete",
+          "tool": "(delete|remove)_entity",
+          "why": "deletes what the arguments name: the CEO confirms (hard limit 4)"
+        }
+      ],
+      "ask_agent": {
+        "id": "agent-question",
+        "tool": "ask",
+        "server": "work_?iq",
+        "when_key": "agentid",
+        "why": "asks another assistant in plain language: what it may do on the CEO's behalf can't be checked, so the CEO confirms"
+      }
+    },
     "ask": [
       {
-        "id": "destructive",
-        "pattern": "(^|_)(delete|remove|trash|purge|move|rename|upload|overwrite)(_|$)|update_file|copy_item|create_folder",
-        "why": "changes or removes documents or mail: the CEO confirms (hard limit 4)"
+        "id": "overwrite",
+        "pattern": "(^|_)(upload|overwrite|replace|copy)(_|$)|update_file|create_folder",
+        "why": "may overwrite an existing document: the CEO confirms (hard limit 4). Uploads, copies and new folders that set their conflict behaviour to fail or rename only create, and don't ask"
+      },
+      {
+        "id": "delete-move",
+        "pattern": "(^|_)(delete|remove|trash|purge|move|rename)(_|$)",
+        "why": "deletes, moves or renames documents or mail: the CEO confirms (hard limit 4)"
       }
     ]
   },
+  "_known_prefixes": "Servers whose tool names the hard limits were checked against. Each one's outbound tools are also denied in the settings template's permission rules, as a second layer; a server with no outbound tools (m365-mail: drafts, moves and deletes only) has nothing to deny there.",
   "known_prefixes": [
     "mcp__claude_ai_Microsoft_365__",
     "mcp__Microsoft_365__",
-    "mcp__claude-artifacts__"
+    "mcp__claude-artifacts__",
+    "mcp__m365-graph__",
+    "mcp__m365-mail__"
   ],
   "bash": {
     "deny": [
