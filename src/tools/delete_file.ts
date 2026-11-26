@@ -34,6 +34,7 @@ import {
   validateOptionalString,
   validateRequiredString,
 } from "../types/validators.js";
+import { assertExpectedParent } from "./_expected_parent.js";
 import type { Tool, ToolDefinition, ToolHandler, ToolResponse } from "../types/tool.js";
 
 const TOOL_NAME = "m365-graph:delete_file";
@@ -47,6 +48,11 @@ const definition: ToolDefinition = {
     properties: {
       item_id: { type: "string", description: "Item to delete." },
       drive_id: { type: "string", description: "Optional drive ID. Defaults to /me/drive." },
+      expected_parent_id: {
+        type: "string",
+        description:
+          "Optional guard: the id of the folder the item must be in. If the item's current parent differs, the tool refuses and changes nothing. Pass the same value on both calls.",
+      },
       confirmation_token: {
         type: "string",
         description:
@@ -92,6 +98,7 @@ const handler: ToolHandler = async (
   const itemId = validateRequiredString(args.item_id, "item_id");
   const driveId = validateOptionalString(args.drive_id, "drive_id");
   const confirmationToken = validateOptionalString(args.confirmation_token, "confirmation_token");
+  const expectedParentId = validateOptionalString(args.expected_parent_id, "expected_parent_id");
 
   const drivePath = driveId
     ? `/drives/${encodeURIComponent(driveId)}`
@@ -100,17 +107,20 @@ const handler: ToolHandler = async (
 
   const spec: Record<string, unknown> = { item_id: itemId };
   if (driveId !== undefined) spec.drive_id = driveId;
+  if (expectedParentId !== undefined) spec.expected_parent_id = expectedParentId;
 
   // ---------- Phase 1: preview ----------
   if (!confirmationToken) {
-    const item = (await graph.api(apiPath).get()) as Record<string, unknown>;
+    const item =
+      (await assertExpectedParent(graph, apiPath, itemId, expectedParentId, "delete")) ??
+      ((await graph.api(apiPath).get()) as Record<string, unknown>);
     const summary = summarizePreview(item);
     const issued = issueConfirmation(TOOL_NAME, spec);
     const preview: DeletePreview = {
       item: summary,
       ...issued,
       instructions:
-        `Re-call ${TOOL_NAME} with the SAME args (item_id${driveId ? ", drive_id" : ""}) ` +
+        `Re-call ${TOOL_NAME} with the SAME args (item_id${driveId ? ", drive_id" : ""}${expectedParentId ? ", expected_parent_id" : ""}) ` +
         `plus this confirmation_token to execute the delete.`,
     };
     return {
@@ -127,6 +137,8 @@ const handler: ToolHandler = async (
     );
   }
 
+  // Re-checked at execution: the item may have moved since the preview.
+  await assertExpectedParent(graph, apiPath, itemId, expectedParentId, "delete");
   await graph.api(apiPath).delete();
 
   return {

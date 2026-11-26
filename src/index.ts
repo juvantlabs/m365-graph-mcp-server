@@ -28,6 +28,8 @@ import {
 import { makeMsalClient } from "./auth/msal.js";
 import { parseSetupArgs, runSetup } from "./auth/setup.js";
 import { makeGraphClient } from "./client/graph.js";
+import { getDownloadMode, startRetention } from "./tools/_downloads.js";
+import { getSandboxRoot } from "./tools/download_file.js";
 import { ALL_TOOLS, buildHandlerMap } from "./tools/index.js";
 
 export const TENANT_ID_RE =
@@ -208,7 +210,17 @@ async function main(): Promise<void> {
       }
       await runSetup(options);
     },
-    serve: runMcpServer,
+    serve: async () => {
+      try {
+        getDownloadMode();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[m365-graph-mcp-server] ${message}`);
+        process.exit(1);
+      }
+      await startRetention(getSandboxRoot(process.env.M365_TENANT_ID!));
+      await runMcpServer();
+    },
   });
 }
 

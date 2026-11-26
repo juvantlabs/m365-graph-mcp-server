@@ -11,6 +11,31 @@ project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — download retention
+
+### Changed
+
+- **Downloaded copies are deleted after `M365_DOWNLOAD_TTL_HOURS`** (1–720, default 24), at startup, hourly while the server runs, and after each download. Before, they stayed until deleted by hand: copies already older than the limit are deleted at the first start of this version. Move what you want to keep first.
+  - Only regular files with the server's own name shape (`<16 hex>-<name>`), directly inside a tenant folder of the sandbox, are deleted. Symlinks are not followed. Logs carry counts, not names.
+
+### Added
+
+- **`M365_DOWNLOAD_MODE=return`**: `download_file` writes nothing and returns the content (text, or base64), up to 2 MiB. An unrecognised value stops the server.
+
+### Fixed
+
+- A download that fails midway leaves no partial file.
+
+## [0.8.0] — `expected_parent_id` guard on delete and move
+
+### Added — Files
+
+- **`expected_parent_id` on `m365-graph:delete_file` and `m365-graph:move_file`** (optional). The tool reads the item first, and refuses with "Nothing was changed" unless the item's current parent folder has exactly that id.
+  - `delete_file` checks at the preview and again right before deleting, because the item may move in between. The confirmation token is bound to `expected_parent_id`, so the argument must be passed on both calls.
+  - Purpose: a caller, or a policy hook in front of the server, can limit moves and deletes to one folder. The argument says where the item is, and the server checks that it is true.
+  - Omitted, both tools behave exactly as before. `move_file` then makes no extra read.
+- Version pins in the README updated to `0.8.0`.
+
 ## [0.7.2] — documentation only
 
 No code, tool, schema or scope change.
