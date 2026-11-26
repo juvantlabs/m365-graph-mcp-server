@@ -25,7 +25,11 @@
       "mcp__Microsoft_365__teams_send_chat_message",
       "mcp__Microsoft_365__teams_send_channel_message",
       "mcp__Microsoft_365__teams_reply_channel_message",
-      "mcp__Microsoft_365__teams_create_chat"
+      "mcp__Microsoft_365__teams_create_chat",
+      "mcp__m365-graph__m365-graph_create_event",
+      "mcp__m365-graph__m365-graph_update_event",
+      "mcp__m365-graph__m365-graph_cancel_event",
+      "mcp__m365-graph__m365-graph_decline_event"
     ]
   },
   "hooks": {
@@ -37,7 +41,7 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/juvant_hooks.py\" limits"
           }
         ],
-        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|mcp__.*"
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|mcp__.*|Read|Grep|Glob|Skill"
       }
     ],
     "SessionStart": [
