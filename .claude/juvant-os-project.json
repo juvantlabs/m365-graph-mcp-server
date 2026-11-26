@@ -1,5 +1,6 @@
 {
   "project": "m365-graph-mcp-server",
   "company_repo": "",
-  "shared_with": "everyone (public repository)"
+  "shared_with": "everyone (public repository)",
+  "company_owned": true
 }
